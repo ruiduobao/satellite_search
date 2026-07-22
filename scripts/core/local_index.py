@@ -329,12 +329,16 @@ def search(query: str, source: str = "all", limit: int = 20) -> List[Dict[str, A
                 _push("celestrak", ("celestrak", rec.get("NORAD_CAT_ID")), score, rec, q)
                 if len([x for x in out if x["source"] == "celestrak"]) >= limit:
                     break
-        # Also try NORAD id direct lookup (works for both active and decayed)
+        # Also try NORAD id direct lookup (try active first, then full SATCAT)
         if norad_q is not None:
-            for rec in all_celestrak():
-                if rec.get("NORAD_CAT_ID") == norad_q:
-                    _push("celestrak", ("celestrak", norad_q), 1000, rec, query)
-                    break
+            for src_list in (all_celestrak_active(), all_celestrak()):
+                for rec in src_list:
+                    if rec.get("NORAD_CAT_ID") == norad_q:
+                        _push("celestrak", ("celestrak", norad_q), 1000, rec, query)
+                        break
+                else:
+                    continue
+                break
     # SatNOGS (alive only)
     if source in ("all", "satnogs"):
         for q in queries:
@@ -467,7 +471,15 @@ def _find_in_eoportal(query: str) -> Optional[Dict[str, Any]]:
 
 
 def _find_norad_in_celestrak(norad_id: int) -> Optional[Dict[str, Any]]:
-    """NORAD-id direct lookup in the full CelesTrak SATCAT (70k entries)."""
+    """NORAD-id direct lookup.
+
+    Tries the bundled active-payloads subset first (fast, ~7 MB), then
+    falls back to the full CelesTrak SATCAT (25 MB, only present if the
+    user has run ``update --source celestrak``).
+    """
+    for rec in all_celestrak_active():
+        if rec.get("NORAD_CAT_ID") == norad_id:
+            return rec
     for rec in all_celestrak():
         if rec.get("NORAD_CAT_ID") == norad_id:
             return rec
