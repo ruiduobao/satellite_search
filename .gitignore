@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+
+# Pytest
+.pytest_cache/
+.pytest_cache/**
+htmlcov/
+.coverage
+.coverage.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Virtual env
+venv/
+env/
+.venv/
+
+# Build / dist
+build/
+dist/
+*.spec
+
+# Skill local artifacts (keep data/ — that's the bundled index)
+# data/_oscar_test.xlsx is intentionally NOT in data/ (the scraper recreates it)
+
+# Editor scratch / temp
+*.tmp
+*.bak

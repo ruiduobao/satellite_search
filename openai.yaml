@@ -1,0 +1,22 @@
+name: satellite_search
+display_name: 卫星参数查询
+description: |
+  Search and fetch remote-sensing satellite parameters from two authoritative
+  public sources: eoPortal (ESA, ~1000+ missions, detailed text) and
+  WMO OSCAR (~900 satellites, structured orbit / instrument / band tables).
+  Offline-first: ships a pre-scraped JSON index. Live fetch via Playwright
+  when a satellite is not in the index.
+version: 0.1.0
+author: Mavis
+license: MIT-0
+entrypoint: scripts/satellite_search.py
+runtime: python>=3.9
+tags:
+  - gis
+  - remote-sensing
+  - satellite
+  - eoportal
+  - oscar
+  - wmo
+  - earth-observation
+  - params
