@@ -37,6 +37,12 @@ dist/
 
 # Skill local artifacts (keep data/ — that's the bundled index)
 # data/_oscar_test.xlsx is intentionally NOT in data/ (the scraper recreates it)
+# Scrape run logs / scratch files
+data/_scrape_log.txt
+data/_scrape_err.txt
+data/_test_crawl4ai.json
+data/_oscar_*.html
+data/_eoportal_list_raw.html
 
 # Editor scratch / temp
 *.tmp

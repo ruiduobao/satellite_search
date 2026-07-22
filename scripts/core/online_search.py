@@ -1,87 +1,126 @@
 """Online search fallback.
 
-When ``local_index`` has no match and ``scraper`` can't fetch (e.g. Playwright
-not installed, or eoPortal 504s forever), this module falls back to a generic
-web search via the ``web_search`` skill (when present on the runtime).
+When the local index has no match and the scraper can't reach eoPortal
+(Cloudflare 504s, missing playwright, etc.), this module falls back to a
+web search so the user always gets *something* useful — even if it's just
+"here are the URLs you should look at manually".
 
-The runtime contract is intentionally simple: this module returns a
-``{"hint": str, "results": [...]}`` payload that the CLI can display to the
-user as "where to look next". It does NOT attempt to parse the search
-results — the user (or the calling agent) can decide whether to fetch one
-of the suggested URLs through ``scraper``.
+Engine priority (first to succeed wins):
 
-If the ``web_search`` skill is not available on the current runtime, the
-functions in this module return ``None`` and the caller is expected to
-handle that case gracefully (i.e. report "no online source available").
+1. ``crawl4ai-skill`` (DuckDuckGo) — already installed on this runtime
+2. ``web_search`` skill (Baidu / Bing / DDG)
+3. Direct duckduckgo.com via ``requests`` (last-ditch)
+
+The module exposes:
+
+* :func:`search_satellite_online` — generic web search
+* :func:`fallback_for_eoportal`    — search restricted to eoportal.org
+* :func:`fallback_for_oscar`       — search restricted to space.oscar.wmo.int
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 from typing import Any, Dict, List, Optional
 
 
-def _web_search_skill_available() -> bool:
-    """Return True iff the local-runtime ``web_search`` skill is installed."""
-    # The skill is exposed via a CLI wrapper named ``web-search`` (or
-    # ``web_search``). We do a best-effort check; the actual call is made
-    # by spawning the skill's main script.
-    for exe in ("web-search", "web_search", "websearch"):
-        if shutil.which(exe):
-            return True
-    # Also check the OpenClaw skill install path on Windows
-    for d in (
-        os.path.expandvars(r"%USERPROFILE%\.codex\skills\web-search-ex-skill"),
-        os.path.expandvars(r"%USERPROFILE%\.codex\skills\web-search"),
-    ):
-        if os.path.isdir(d):
-            return True
-    return False
+# ---------------------------------------------------------------------------
+# Engine probe
+# ---------------------------------------------------------------------------
+
+def _which(name: str) -> Optional[str]:
+    return shutil.which(name) or shutil.which(f"{name}.cmd") or shutil.which(f"{name}.exe")
 
 
-def search_satellite_online(
-    query: str,
-    *,
-    source_hint: Optional[str] = None,
-    num_results: int = 8,
-) -> Optional[Dict[str, Any]]:
-    """Search the web for a satellite the local index doesn't know about.
+def _crawl4ai_available() -> bool:
+    return _which("crawl4ai-skill") is not None
 
-    Parameters
-    ----------
-    query : str
-        The satellite name (e.g. "高分三号", "Iceye X-32").
-    source_hint : str, optional
-        Restrict the search to a specific source domain
-        (e.g. "site:eoportal.org", "site:space.oscar.wmo.int").
-    num_results : int
-        Cap the number of results.
 
-    Returns
-    -------
-    dict with keys ``hint`` (human-readable summary) and ``results``
-    (list of {title, url, snippet}); or ``None`` if the web_search skill
-    is not available on the current runtime.
-    """
-    if not _web_search_skill_available():
+def _web_search_available() -> bool:
+    return _which("web-search") is not None or _which("web_search") is not None
+
+
+# ---------------------------------------------------------------------------
+# Engines
+# ---------------------------------------------------------------------------
+
+def _run_subprocess(cmd: List[str], timeout: int = 60) -> Optional[Dict[str, Any]]:
+    """Run a CLI, return parsed JSON if the tool supports ``--json`` /
+    ``-o``/stdout JSON, else return ``None``."""
+    try:
+        cp = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+    if cp.returncode != 0:
+        return None
+    out = cp.stdout.strip()
+    if not out:
+        return None
+    # Try to parse JSON directly (crawl4ai's "search" with -o prints to a file though)
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
         return None
 
-    # Build a query that biases toward satellite parameter sites
-    site = source_hint or ""
-    q = query if site else f"{query} satellite parameters resolution"
-    if site:
-        q = f"{q} {site}"
-    q = f"{q} satellite"
 
-    # Try to invoke the web-search skill via the Python entry point. The
-    # skill exposes a ``main()`` function accepting a dict with ``action``,
-    # ``query``, ``num_results``. We import lazily so this module loads even
-    # when the skill is not on the Python path.
+def _engine_crawl4ai(query: str, num: int, site: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Use the ``crawl4ai-skill search`` CLI. The CLI writes JSON to a
+    temp file when ``-o`` is given; otherwise it prints a Markdown table."""
+    exe = _which("crawl4ai-skill")
+    if not exe:
+        return None
+    q = query if site is None else f"{query} site:{site}"
+    # Use -o to get JSON. The CLI may need ~60-120s on first invocation
+    # because it downloads Chromium under the hood.
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        cmd = [exe, "search", q, "-n", str(min(num, 20)), "-o", tmp_path]
+        cp = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        return None
+    if cp.returncode != 0:
+        return None
+    if not os.path.exists(tmp_path):
+        return None
+    try:
+        with open(tmp_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+    # crawl4ai-skill search returns: { "query": ..., "results": [{"title","url","snippet"}, ...] }
+    items = data.get("results") if isinstance(data, dict) else data
+    if not isinstance(items, list):
+        return None
+    cleaned: List[Dict[str, str]] = []
+    for r in items:
+        if not isinstance(r, dict):
+            continue
+        cleaned.append({
+            "title": str(r.get("title") or "").strip(),
+            "url": str(r.get("url") or r.get("href") or "").strip(),
+            "snippet": str(r.get("snippet") or r.get("body") or r.get("description") or "").strip(),
+        })
+    return {
+        "engine": "crawl4ai-skill (DuckDuckGo)",
+        "query_used": q,
+        "results": cleaned,
+    }
+
+
+def _engine_web_search_skill(query: str, num: int, site: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Call the ``web_search`` skill via its Python entry point."""
     try:
         import importlib
-        # Try a few candidate module names; first one to import wins.
         mod = None
         for name in ("web_search", "websearch", "web_search_skill", "websearch_skill"):
             try:
@@ -91,15 +130,15 @@ def search_satellite_online(
                 continue
         if mod is None:
             return None
+        q = query if site is None else f"{query} site:{site}"
         if hasattr(mod, "main"):
-            res = mod.main({"action": "search", "query": q, "num_results": num_results})
+            res = mod.main({"action": "search", "query": q, "num_results": num})
         elif hasattr(mod, "search"):
-            res = mod.search(q, num_results=num_results)
+            res = mod.search(q, num_results=num)
         else:
             return None
     except Exception:
         return None
-
     if not isinstance(res, dict):
         return None
     items = res.get("results") or res.get("data") or []
@@ -113,12 +152,105 @@ def search_satellite_online(
             "snippet": str(r.get("snippet") or r.get("body") or "").strip(),
         })
     return {
-        "hint": (
-            f"Web search results for {query!r}. The local index has no entry — "
-            "open one of the suggested URLs in your browser for the authoritative "
-            "data, or call `satellite_search.py fetch <name> --source both` to "
-            "attempt an automated grab."
-        ),
+        "engine": res.get("engine", "web_search skill"),
         "query_used": q,
         "results": cleaned,
     }
+
+
+def _engine_duckduckgo_direct(query: str, num: int, site: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Last-ditch: hit DuckDuckGo's HTML endpoint directly."""
+    import requests
+    q = query if site is None else f"{query} site:{site}"
+    s = requests.Session()
+    s.trust_env = False
+    try:
+        r = s.get(
+            "https://html.duckduckgo.com/html/",
+            params={"q": q, "kl": "us-en"},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/121.0 Safari/537.36"},
+            timeout=20,
+        )
+    except Exception:
+        return None
+    if r.status_code != 200:
+        return None
+    import re
+    results: List[Dict[str, str]] = []
+    for m in re.finditer(
+        r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([^<]+)</a>.*?'
+        r'class="result__snippet"[^>]*>(.*?)</a>',
+        r.text, re.DOTALL,
+    ):
+        url, title, snippet = m.group(1), m.group(2), m.group(3)
+        # DuckDuckGo wraps clicks — unwrap if uddg= is present
+        if "uddg=" in url:
+            from urllib.parse import unquote, parse_qs, urlparse
+            qs = parse_qs(urlparse(url).query)
+            if "uddg" in qs:
+                url = unquote(qs["uddg"][0])
+        results.append({
+            "title": re.sub(r"<[^>]+>", "", title).strip(),
+            "url": url.strip(),
+            "snippet": re.sub(r"<[^>]+>", "", snippet).strip(),
+        })
+        if len(results) >= num:
+            break
+    return {
+        "engine": "duckduckgo-direct",
+        "query_used": q,
+        "results": results,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def search_satellite_online(
+    query: str,
+    *,
+    site: Optional[str] = None,
+    num_results: int = 8,
+) -> Optional[Dict[str, Any]]:
+    """Search the web for a satellite the local index doesn't know about.
+
+    Returns
+    -------
+    dict with keys ``engine``, ``hint``, ``query_used``, ``results``;
+    or ``None`` if every engine failed.
+    """
+    engines = [
+        _engine_crawl4ai,
+        _engine_web_search_skill,
+        _engine_duckduckgo_direct,
+    ]
+    for engine in engines:
+        try:
+            res = engine(query, num_results, site)
+        except Exception:
+            res = None
+        if res and res.get("results"):
+            res["hint"] = (
+                f"Web search results for {query!r} via {res['engine']}. "
+                "Open one of the suggested URLs for authoritative data; "
+                "or call `satellite_search.py fetch <name> --source both` "
+                "to attempt an automated grab."
+            )
+            return res
+    return None
+
+
+def fallback_for_eoportal(slug: str) -> Optional[Dict[str, Any]]:
+    """Search the web restricted to eoportal.org for one satellite."""
+    return search_satellite_online(slug, site="eoportal.org", num_results=5)
+
+
+def fallback_for_oscar(acronym: str) -> Optional[Dict[str, Any]]:
+    """Search the web restricted to space.oscar.wmo.int for one satellite."""
+    return search_satellite_online(acronym, site="space.oscar.wmo.int", num_results=5)
+
+
+def any_engine_available() -> bool:
+    """Return True iff at least one online search engine is reachable."""
+    return _crawl4ai_available() or _web_search_available() or True  # DDG-direct always works

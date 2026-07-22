@@ -341,6 +341,10 @@ def info(query: str) -> Optional[MergedRecord]:
     """Look up a single satellite across both sources and merge them.
 
     Returns ``None`` if neither source has a match.
+
+    If the eoportal record has a ``detail`` sub-dict (from a successful
+    detail-page fetch), its fields are surfaced so ``info`` shows
+    summary, FAQ, applications, etc. without re-fetching.
     """
     oscar = _find_in_oscar(query)
     eoportal = _find_in_eoportal(query)
@@ -354,30 +358,42 @@ def info(query: str) -> Optional[MergedRecord]:
     if oscar:
         sources.append("oscar")
 
+    # If the eoportal record carries a detail payload, lift it onto the
+    # top-level eoportal dict so the rest of the merger can use it.
+    eoportal_effective = eoportal
+    if eoportal and eoportal.get("detail"):
+        d = eoportal["detail"]
+        for k in ("agency", "country", "launch_date", "end_of_life", "status",
+                  "summary", "applications", "instruments", "measurement_domain",
+                  "faq", "last_updated"):
+            if d.get(k) is not None and not eoportal.get(k):
+                eoportal = {**eoportal, k: d[k]}
+        eoportal_effective = eoportal
+
     # Build a "merged" headline
     agency: Optional[str] = None
     if oscar and oscar.get("agencies"):
         agency = ", ".join(oscar["agencies"])
-    elif eoportal and eoportal.get("agency"):
-        agency = eoportal["agency"]
+    elif eoportal_effective and eoportal_effective.get("agency"):
+        agency = eoportal_effective["agency"]
 
     launch: Optional[str] = None
     if oscar and oscar.get("launch"):
         launch = oscar["launch"]
-    elif eoportal and eoportal.get("launch_date"):
-        launch = eoportal["launch_date"]
+    elif eoportal_effective and eoportal_effective.get("launch_date"):
+        launch = eoportal_effective["launch_date"]
 
     eol: Optional[str] = None
     if oscar and oscar.get("eol"):
         eol = oscar["eol"]
-    elif eoportal and eoportal.get("end_of_life"):
-        eol = eoportal["end_of_life"]
+    elif eoportal_effective and eoportal_effective.get("end_of_life"):
+        eol = eoportal_effective["end_of_life"]
 
     status: Optional[str] = None
     if oscar and oscar.get("status"):
         status = oscar["status"]
-    elif eoportal and eoportal.get("status"):
-        status = eoportal["status"]
+    elif eoportal_effective and eoportal_effective.get("status"):
+        status = eoportal_effective["status"]
 
     orbit_bits: List[str] = []
     if oscar and oscar.get("orbit"):
@@ -391,9 +407,24 @@ def info(query: str) -> Optional[MergedRecord]:
     instruments: List[str] = []
     if oscar and oscar.get("instruments"):
         instruments = list(oscar["instruments"])
-    elif eoportal and eoportal.get("instruments"):
-        instruments = list(eoportal["instruments"])
+    elif eoportal_effective and eoportal_effective.get("instruments"):
+        instruments = list(eoportal_effective["instruments"])
 
+    # The merged payload keeps the full eoportal entry (including
+    # summary/faq/etc. if present) so downstream code can introspect it.
+    payload_eoportal = None
+    if eoportal_effective:
+        payload_eoportal = {
+            k: eoportal_effective[k] for k in (
+                "name", "slug", "url", "agency", "country", "launch_date",
+                "end_of_life", "status", "summary", "applications",
+                "instruments", "measurement_domain", "faq", "last_updated",
+                "taxonomy",
+            ) if k in eoportal_effective
+        }
+
+    # Add merged-level extras
+    payload_eoportal = payload_eoportal or None
     merged: Dict[str, Any] = {
         "agency": agency,
         "launch_date": launch,
@@ -404,18 +435,22 @@ def info(query: str) -> Optional[MergedRecord]:
         "instruments_count": len(instruments),
         "sources_count": len(sources),
     }
+    if eoportal_effective and eoportal_effective.get("summary"):
+        merged["summary"] = eoportal_effective["summary"]
+    if eoportal_effective and eoportal_effective.get("faq"):
+        merged["faq_count"] = len(eoportal_effective["faq"])
 
     # Pick a canonical name
-    if eoportal and oscar:
-        name = eoportal.get("name") or oscar.get("acronym")
-    elif eoportal:
-        name = eoportal.get("name") or query
+    if eoportal_effective and oscar:
+        name = eoportal_effective.get("name") or oscar.get("acronym")
+    elif eoportal_effective:
+        name = eoportal_effective.get("name") or query
     else:
         name = oscar.get("acronym") or query
 
     aliases: List[str] = []
-    if eoportal and oscar:
-        eo_name = eoportal.get("name")
+    if eoportal_effective and oscar:
+        eo_name = eoportal_effective.get("name")
         os_name = oscar.get("acronym")
         if eo_name and os_name and eo_name != os_name and os_name not in aliases:
             aliases.append(os_name)
@@ -434,7 +469,7 @@ def info(query: str) -> Optional[MergedRecord]:
         name=name,
         aliases=aliases,
         sources=sources,
-        eoportal=eoportal,
+        eoportal=payload_eoportal,
         oscar=oscar,
         merged=merged,
         merge_hint=merge_hint,

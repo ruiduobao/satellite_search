@@ -3,6 +3,31 @@
 All notable changes to `satellite_search` are documented here.
 The skill follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-07-22
+
+### Added
+- **eoPortal 详情页全量抓取**：内置 Playwright + stealth（隐藏 webdriver、
+  模拟 Chrome runtime、navigator.plugins、languages、WebGL），4 并发
+  增量持久化，覆盖 1000+ 颗卫星的 detail / Quick facts / FAQ。
+- **`scripts/scrape_eoportal_details.py`**：批量抓 eoPortal 详情，
+  支持 `--concurrency` / `--retries` / `--shuffle` / `--only-slug`。
+- **`scripts/online_fallback.py`**：对抓不到的 slug 跑 web search（site:
+  eoportal.org），结果存到 `data/web_search_results.jsonl`，给用户
+  "原始出处"指引。
+- **`scripts/build_detailed_index.py`**：合并 detail 数据到 merged_index，
+  让 `info` 直接展示 summary / FAQ / applications。
+- **`core/online_search.py` 重写**：3 个引擎兜底（crawl4ai-skill DuckDuckGo
+  → web_search skill → duckduckgo.com-direct）。
+- **CLI `info` 输出增强**：展示 eoPortal summary、FAQ Q&A、last_updated。
+- **CLI `fetch` 自动兜底**：eoPortal 抓失败时自动跑 web search，
+  `--no-online-fallback` 可关闭。
+
+### Changed
+- **`core/local_index.info()`**：自动用 eoportal record 的 `detail` 字段
+  作为优先数据源，无需重新抓。
+- 数据规模：~1000 颗 eoPortal 详情（agency/launch/instruments/FAQ）
+  + 1038 OSCAR 列表 = 离线可查 2130 颗；fetch 失败时自动 search。
+
 ## [0.1.0] — 2026-07-22
 
 ### Added

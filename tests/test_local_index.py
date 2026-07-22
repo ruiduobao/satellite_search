@@ -105,3 +105,30 @@ def test_normalize_strips_spaces_diacritics():
     assert local_index._normalize("Gaofen-1") == "gaofen1"
     # Diacritics (none in this domain, but check the function works)
     assert local_index._normalize("") == ""
+
+
+def test_info_includes_eoportal_detail_when_present():
+    """When the eoportal record has a `detail` sub-dict, the merged info()
+    payload should surface the summary and FAQ count."""
+    m = local_index.info("Landsat-9")
+    assert m is not None
+    eo = m.eoportal
+    assert eo is not None
+    # detail was fetched during 0.2.0 release
+    if eo.get("summary") is not None:
+        assert isinstance(eo["summary"], str)
+        assert len(eo["summary"]) > 30
+    if eo.get("faq") is not None:
+        assert isinstance(eo["faq"], list)
+        if eo["faq"]:
+            assert "q" in eo["faq"][0]
+            assert "a" in eo["faq"][0]
+
+
+def test_at_least_some_eoportal_details_cached():
+    """Sanity: the bundled index should carry detail payloads for a
+    non-trivial fraction of the eoPortal records."""
+    eoportal = local_index.all_eoportal()
+    with_detail = sum(1 for r in eoportal if r.get("detail"))
+    assert with_detail >= 100  # at least 100 of ~1100
+    assert with_detail >= len(eoportal) * 0.05  # at least 5%

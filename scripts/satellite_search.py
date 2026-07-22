@@ -170,6 +170,26 @@ def cmd_info(args: argparse.Namespace) -> int:
     print(f"  Coverage: {m.get('sources_count', len(payload['sources']))} of 2 sources")
     if payload.get("merge_hint"):
         print(f"  Note: {payload['merge_hint']}")
+    # eoportal detail extras
+    eo = payload.get("eoportal") or {}
+    if eo.get("summary"):
+        print(f"\n  Summary ({eo.get('url')}):")
+        s = eo["summary"]
+        if len(s) > 400:
+            s = s[:400].rstrip() + "..."
+        print(f"    {s}")
+    if eo.get("applications"):
+        print(f"  Applications: {', '.join(eo['applications'])}")
+    if eo.get("faq"):
+        print(f"  FAQ ({len(eo['faq'])}):")
+        for qa in eo["faq"][:3]:
+            print(f"    Q: {qa.get('q','')[:100]}")
+            ans = (qa.get("a") or "").strip()
+            if len(ans) > 200:
+                ans = ans[:200].rstrip() + "..."
+            print(f"    A: {ans}")
+    if eo.get("last_updated"):
+        print(f"  eoPortal updated: {eo['last_updated']}")
     # URLs
     if payload.get("eoportal") and payload["eoportal"].get("url"):
         print(f"\n  eoPortal: {payload['eoportal']['url']}")
@@ -241,17 +261,25 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             print(f"Fetching eoPortal detail for {slug} ...")
             det = scraper.fetch_eoportal_detail(slug)
             if det:
-                # update local cache
-                existing_slugs[slug] = det
+                # update local cache (preserve existing taxonomy)
+                old = existing_slugs.get(slug) or {}
+                merged = {**old, **det, "source": "eoportal"}
+                existing_slugs[slug] = merged
                 with open(target_path, "w", encoding="utf-8") as f:
                     from core.models import jsonl_dumps  # type: ignore
                     f.write(jsonl_dumps(list(existing_slugs.values())))
                 local_index._load_jsonl.cache_clear()
                 out["found"]["eoportal"] = det
             else:
+                # Live fetch failed: fall back to web_search for guidance.
                 out.setdefault("warnings", []).append(
                     f"eoPortal detail fetch for {slug} failed (Cloudflare 504 or no detail page)."
                 )
+                if not args.no_online_fallback:
+                    print(f"  Detail fetch failed; running web search for {slug} ...")
+                    fallback = online_search.fallback_for_eoportal(slug)
+                    if fallback:
+                        out["online_fallback"] = fallback
 
     if not out["found"]:
         print(f"No match for {args.name!r} in {source}.")
@@ -414,6 +442,8 @@ def build_parser() -> argparse.ArgumentParser:
                     choices=["oscar", "eoportal", "both"])
     sp.add_argument("--no-live", action="store_true",
                     help="Only consult the local index; don't hit the network")
+    sp.add_argument("--no-online-fallback", action="store_true",
+                    help="Skip the web-search fallback when live fetch fails")
     sp.set_defaults(func=cmd_fetch)
 
     # stats
