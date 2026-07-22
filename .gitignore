@@ -41,8 +41,8 @@ dist/
 data/_scrape_log.txt
 data/_scrape_err.txt
 data/_test_crawl4ai.json
-data/_oscar_*.html
-data/_eoportal_list_raw.html
+data/_*.html
+data/_satcat.csv
 data/_translate_log.txt
 data/_translate_err.txt
 scripts/_run_translate.ps1

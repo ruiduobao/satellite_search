@@ -1,8 +1,9 @@
-"""Chinese translations for OSCAR / eoPortal enum values.
+"""Chinese translations for OSCAR / eoPortal / CelesTrak / UCS enum values.
 
-Both data sources ship with English enum values (orbit types, status,
-agency names, etc.). The CLI displays the Chinese translation by default
-and shows the original English in parentheses if it differs.
+The data sources ship with English enum values (orbit types, status,
+agency names, country codes, etc.). The CLI displays the Chinese
+translation by default and shows the original English in parentheses if
+it differs.
 
 Keep the table narrow and idiomatic; do not translate acronyms like
 "NASA" or "ESA" — those are proper nouns.
@@ -113,6 +114,230 @@ DOMAIN_ZH: Dict[str, str] = {
     "Snow & Ice": "冰雪",
     "Gravity and Magnetic Fields": "重力与磁场",
 }
+
+
+# ---------------------------------------------------------------------------
+# CelesTrak SATCAT enum translations
+# ---------------------------------------------------------------------------
+
+# CelesTrak's OWNER field uses 3-letter codes. The list below covers the
+# commonly-seen codes; anything not in the table falls through to the
+# original English. ``CIS`` = Commonwealth of Independent States (post-
+# Soviet states that did not get a separate ISO code); ``PRC`` = People's
+# Republic of China (for historical records); ``ESA`` = European Space
+# Agency.
+CELESTRAK_COUNTRY_ZH: Dict[str, str] = {
+    "US": "美国",
+    "CIS": "苏联/独联体",
+    "PRC": "中国",
+    "CHINA": "中国",
+    "CN": "中国",
+    "SU": "苏联",
+    "RU": "俄罗斯",
+    "J": "日本",
+    "JP": "日本",
+    "IN": "印度",
+    "F": "法国",
+    "FR": "法国",
+    "D": "德国",
+    "DE": "德国",
+    "I": "意大利",
+    "IT": "意大利",
+    "UK": "英国",
+    "GB": "英国",
+    "ESA": "欧洲空间局",
+    "EUME": "欧盟多国",
+    "ES": "西班牙",
+    "SE": "瑞典",
+    "NO": "挪威",
+    "NL": "荷兰",
+    "CA": "加拿大",
+    "KR": "韩国",
+    "AUS": "澳大利亚",
+    "AU": "澳大利亚",
+    "IL": "以色列",
+    "BR": "巴西",
+    "AR": "阿根廷",
+    "MEX": "墨西哥",
+    "MX": "墨西哥",
+    "IR": "伊朗",
+    "IRAN": "伊朗",
+    "SA": "沙特阿拉伯",
+    "UAE": "阿联酋",
+    "TURK": "土耳其",
+    "TR": "土耳其",
+    "PAK": "巴基斯坦",
+    "EGY": "埃及",
+    "EG": "埃及",
+    "NIG": "尼日利亚",
+    "AZER": "阿塞拜疆",
+    "KAZ": "哈萨克斯坦",
+    "UKR": "乌克兰",
+    "BEL": "比利时",
+    "POL": "波兰",
+    "TCH": "捷克",
+    "CZ": "捷克",
+    "HUN": "匈牙利",
+    "ROM": "罗马尼亚",
+    "RO": "罗马尼亚",
+    "DEN": "丹麦",
+    "DK": "丹麦",
+    "FIN": "芬兰",
+    "CH": "瑞士",
+    "AUT": "奥地利",
+    "AT": "奥地利",
+    "GREC": "希腊",
+    "GR": "希腊",
+    "POR": "葡萄牙",
+    "PT": "葡萄牙",
+    "TWN": "中国台湾",
+    "TW": "中国台湾",
+    "IM": "马恩岛",
+    "AB": "阿拉伯联合酋长国",
+    "ISS": "国际空间站",
+    "UN": "联合国",
+    "INTR": "国际",
+    "ORG": "国际组织",
+}
+
+
+# CelesTrak OBJECT_TYPE codes
+CELESTRAK_OBJECT_TYPE_ZH: Dict[str, str] = {
+    "PAY": "有效载荷（卫星本体）",
+    "R/B": "火箭箭体",
+    "DEB": "空间碎片",
+    "UNK": "类型不明",
+}
+
+
+# CelesTrak ORBIT_CENTER codes
+CELESTRAK_ORBIT_CENTER_ZH: Dict[str, str] = {
+    "EA": "地球轨道",
+    "MO": "月球轨道",
+    "SU": "太阳轨道",
+    "AS": "小行星",
+    "CO": "彗星",
+    "ME": "水星",
+    "VE": "金星",
+    "MA": "火星",
+    "JU": "木星",
+    "SA": "土星",
+    "UR": "天王星",
+    "NE": "海王星",
+    "PL": "冥王星",
+    "EM": "地月系",
+    "SS": "太阳系逃逸",
+    "EL1": "日地 L1 点",
+    "EL2": "日地 L2 点",
+}
+
+
+# CelesTrak ORBIT_TYPE codes
+CELESTRAK_ORBIT_TYPE_ZH: Dict[str, str] = {
+    "ORB": "在轨运行",
+    "LAN": "已着陆",
+    "IMP": "已撞击",
+    "DOC": "与另一目标对接",
+    "R/T": "往返任务",
+}
+
+
+# SatNOGS status codes
+SATNOGS_STATUS_ZH: Dict[str, str] = {
+    "alive": "在轨运行",
+    "dead": "已失效",
+    "re-entered": "再入大气层",
+    "future": "计划中",
+    "unknown": "状态未知",
+}
+
+
+# UCS orbit classes
+UCS_ORBIT_CLASS_ZH: Dict[str, str] = {
+    "LEO": "低地球轨道",
+    "MEO": "中地球轨道",
+    "GEO": "地球静止轨道",
+    "Elliptical": "椭圆轨道",
+    "HEO": "高椭圆轨道",
+    "Polar": "极轨道",
+    "SSO": "太阳同步轨道",
+}
+
+
+# UCS purposes (common ones; long-tail falls through)
+UCS_PURPOSE_ZH: Dict[str, str] = {
+    "Earth Observation": "对地观测",
+    "Communications": "通信",
+    "Navigation": "导航定位",
+    "Space Science": "空间科学",
+    "Technology Development": "技术试验",
+    "Earth Science": "地球科学",
+    "Meteorological": "气象",
+    "Surveillance": "侦察监视",
+    "Electronic Intelligence": "电子侦察",
+    "Signal Intelligence": "信号情报",
+    "Optical Imaging": "光学成像",
+    "Radar Imaging": "雷达成像",
+    "Maritime Monitoring": "海事监测",
+    "Disaster Monitoring": "灾害监测",
+    "Scientific Research": "科学研究",
+    "Education": "教育",
+    "Experimental": "试验",
+    "Military Observation": "军用观测",
+    "Reconnaissance": "侦察",
+    "Early Warning": "早期预警",
+    "Internet": "互联网",
+    "IoT/M2M": "物联网/机对机通信",
+}
+
+
+# ---------------------------------------------------------------------------
+# Translation helpers
+# ---------------------------------------------------------------------------
+
+
+def country_zh(code: Optional[str]) -> Optional[str]:
+    """Translate a CelesTrak 3-letter country code to Chinese."""
+    if not code:
+        return None
+    return CELESTRAK_COUNTRY_ZH.get(code.strip().upper(), code)
+
+
+def celestrak_object_type_zh(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    return CELESTRAK_OBJECT_TYPE_ZH.get(code.strip().upper(), code)
+
+
+def celestrak_orbit_center_zh(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    return CELESTRAK_ORBIT_CENTER_ZH.get(code.strip().upper(), code)
+
+
+def celestrak_orbit_type_zh(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    return CELESTRAK_ORBIT_TYPE_ZH.get(code.strip().upper(), code)
+
+
+def satnogs_status_zh(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    return SATNOGS_STATUS_ZH.get(code.strip().lower(), code)
+
+
+def ucs_orbit_class_zh(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    return UCS_ORBIT_CLASS_ZH.get(code.strip().upper(), code)
+
+
+def ucs_purpose_zh(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    return UCS_PURPOSE_ZH.get(code.strip(), code)
+
 
 
 # Common application categories

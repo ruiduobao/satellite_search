@@ -2,6 +2,91 @@
 
 所有显著的改动都记录在此。版本号遵循 [语义化版本](https://semver.org/)。
 
+## [0.4.0] — 2026-07-22
+
+### 新增
+
+- **CelesTrak SATCAT 整合**：新增美国国防部太空目标目录（NORAD）。
+  - 全量 70,006 条记录（1957 至今），含有效载荷 / 火箭箭体 / 碎片
+  - 有效载荷子集 19,627 条（`OBJECT_TYPE='PAY' AND DECAY_DATE=''`）
+  - 字段：NORAD_CAT_ID / OBJECT_NAME / OBJECT_TYPE（PAY/R/B/DEB/UNK）/
+    OWNER / LAUNCH_DATE / LAUNCH_SITE / PERIOD / INCLINATION /
+    APOGEE / PERIGEE / ORBIT_CENTER / ORBIT_TYPE / DECAY_DATE
+  - **NORAD 数字查询**：1-6 位数字自动识别为 NORAD 目录号，跨 4 源直查
+  - 抓取：`https://celestrak.org/pub/satcat.csv`（6.6 MB CSV，~3 秒下载）
+- **SatNOGS DB 整合**：新增业余 / 大学 / 立方星社区维护的数据库。
+  - 1,688 条 alive + 1,016 条 re-entered = 2,704 条
+  - 字段：norad_cat_id / name / status / operator / countries / website / citation
+  - 抓取：`https://db.satnogs.org/api/satellites/?format=json&status=alive`（~9 秒）
+- **多源 NORAD 跨参**：`info` 命令查某颗卫星时，会通过 NORAD id 把
+  eoPortal / OSCAR 的文字介绍和 CelesTrak / SatNOGS 的轨道参数 / 运营方
+  国家 / 状态码关联起来——`info 25544` 一次拿到 ISS 的 eoPortal 介绍 + OSCAR
+  仪器清单 + CelesTrak 轨道周期 92.96 min + SatNOGS 状态。
+- **5 源 i18n 枚举翻译**：
+  - CelesTrak：3 字母国家代码（US/CIS/PRC/J/ISS/ESA/...）
+  - CelesTrak：OBJECT_TYPE（PAY/R/B/DEB/UNK）
+  - CelesTrak：ORBIT_CENTER（EA/MO/MA/SA/...）
+  - CelesTrak：ORBIT_TYPE（ORB/LAN/IMP/...）
+  - SatNOGS：status（alive/dead/re-entered/future/unknown）
+  - UCS：orbit_class（LEO/MEO/GEO/HEO/SSO）+ purpose（21 个常用值）
+- **CLI `--source` 扩展到 4 源**：
+  `search --source celestrak|satnogs|ucs|all` / `list --source all` /
+  `update --source celestrak|satnogs|all`
+- **CLI `info` 输出扩展**：
+  - CelesTrak 块：轨道周期 / 倾角 / 远地点 / 近地点 / 发射场 / 在轨状态
+  - SatNOGS 块：状态 / 运营方 / 国家代码 / 官网 / 引用
+  - UCS 块：发射质量 / 设计寿命 / 运载火箭 / 制造商
+- **CLI `update --source all` 自动重建多源 merged 索引**：
+  旧 `build_detailed_index.py` 只处理 OSCAR + eoPortal，新版 update 会同时
+  把 CelesTrak / SatNOGS 按 `norad:N` 键合并进 merged_index.json。
+- **`scripts/scrape_celestrak.py`** + **`scripts/scrape_satnogs.py`**：
+  两个新的独立抓取脚本（可单独运行）；scrape_satnogs 支持 `--status` 过滤。
+- **19 项新单元 + e2e 测试**（`tests/test_local_index.py` + `test_cli.py`）：
+  - CelesTrak 搜索（STARLINK / ISS ZARYA）
+  - NORAD id 直查（25544 → ISS）
+  - `_is_norad_id` 边界测试（1-6 位数字 + 拒绝 7 位）
+  - CelesTrak 数据类反序列化 `to_celestrak_record`
+  - SatNOGS 数据类反序列化 `to_satnogs_record`
+  - i18n 翻译函数（country_zh / celestrak_object_type_zh /
+    celestrak_orbit_center_zh / satnogs_status_zh / ucs_orbit_class_zh /
+    ucs_purpose_zh）
+  - `list_satellites(source="all")` 跨 4 源
+
+### 变更
+
+- **数据规模**：从 2,130 颗扩到 **~21,000 颗**（2,130 OSCAR+eoPortal +
+  ~19,600 CelesTrak 在轨有效载荷 + 1,700 SatNOGS alive，去重后）。
+- **`core/models.py`**：新增 `CelestrakRecord` / `SatnogsRecord` /
+  `UcsRecord` 三个 dataclass；`ALL_SOURCES` 现在 5 个。
+- **`core/local_index.py`** 重写：
+  - 新增 `all_celestrak()` / `all_celestrak_active()` / `all_satnogs()` /
+    `all_satnogs_alive()` / `all_ucs()` 访问器
+  - `search()` 现在跨 4 源（+ UCS 占位）+ NORAD id 直查
+  - `info()` 自动用 NORAD id 跨源关联（eoPortal/OSCAR 文字介绍 ↔
+    CelesTrak 轨道参数 ↔ SatNOGS 状态）
+  - 新增 `to_celestrak_record()` / `to_satnogs_record()` / `to_ucs_record()`
+  - `list_satellites(source="all")` 跨 4 源合并
+- **`core/i18n.py`** 新增 6 个翻译函数 + 6 个常量表。
+- **`scripts/satellite_search.py`**：CLI 全面支持 4 源；`stats` 命令
+  报告所有 5 源统计（`celestrak_total` / `celestrak_active_payloads` /
+  `satnogs_total` / `satnogs_alive` / `ucs`）；`update --source all` 会
+  自动跑 scrape_celestrak.py + scrape_satnogs.py + 重建 merged 索引。
+- **`data/README.md`** 重写：v0.4.0 文件清单（38 MB 总规模），新增
+  CelesTrak / SatNOGS 抓取流程。
+
+### 已知限制
+
+- **UCS Satellite Database 未整合**（`ucs` 源暂为空）：UCS 已下线
+  公开 S3 bucket（`https://s3.amazonaws.com/ucs-documents/.../Sat-database-*.txt`）
+  现 403。v0.5.0 计划通过 web search 找新下载源，或在 eoPortal / CelesTrak
+  找不到时按需补一条。**所有 UCS 相关代码已就绪**，只是没有数据。
+- **CelesTrak 搜索默认走 active_payloads**（19.6k）以保持响应速度；
+  70k 全量只用于 NORAD id 直查和 `--source celestrak` 显式指定。
+- **`scrape_satnogs.py` 不写 `satnogs_all.jsonl`**，避免混淆；
+  alive 写到 `satnogs_alive.jsonl`，re-entered 写到 `satnogs_reentered.jsonl`。
+- **首次 `update` 拉取 CelesTrak** ~6.6 MB CSV（~3 秒下载 + 解析），
+  SatNOGS ~9 秒，eoPortal 列表 ~2 秒，OSCAR 列表 ~4 秒。
+
 ## [0.3.0] — 2026-07-22
 
 ### 新增

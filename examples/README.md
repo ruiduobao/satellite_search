@@ -63,4 +63,53 @@ eoportal Aalto-1: The Finnish Student Nanosatellite    Aalto University  2017-06
 共 8 颗
 ```
 
+### `info 25544` — ISS by NORAD id（v0.4.0 新增跨源合并）
+
+```
+$ python scripts/satellite_search.py info 25544
+# ISS (ZARYA)  / 国际空间站（ZARYA）
+  别名：ZARYA, ISS ZARYA
+  数据源：celestrak（共 1 个）
+  NORAD 目录号：25544
+  运营方国家：国际空间站（ISS）
+
+  [CelesTrak 轨道参数]
+    轨道周期：92.96 分钟
+    轨道倾角：51.64°
+    远地点 / 近地点：424 km / 415 km
+    发射场：TYMSC
+    类型：有效载荷（卫星本体）（在轨有效载荷）
+
+  CelesTrak：https://celestrak.org/satcat/records.php?CATNR=25544
+  提示：eoPortal / OSCAR 等详细目录中暂无对应记录
+```
+
+### `search STARLINK --source celestrak` — CelesTrak 搜索
+
+```
+$ python scripts/satellite_search.py search STARLINK --source celestrak --limit 3
+'STARLINK' 的 3 条最匹配结果（数据源=celestrak）：
+
+   1.[CELESTRAK] NORAD=44713 | STARLINK-1007                          | 美国 | 有效载荷（卫星本体） | 发射=2019-11-11 | score=500
+   2.[CELESTRAK] NORAD=44914 | STARLINK-1208                          | 美国 | 有效载荷（卫星本体） | 发射=2020-01-06 | score=500
+   3.[CELESTRAK] NORAD=45178 | STARLINK-1234                          | 美国 | 有效载荷（卫星本体） | 发射=2020-04-22 | score=500
+```
+
+### `stats`（v0.4.0 跨 5 源统计）
+
+```
+$ python scripts/satellite_search.py stats
+satellite_search 本地索引统计
+--------------------------------------------------
+  oscar                          : 1038
+  eoportal                       : 1128
+  celestrak_total                : 70006
+  celestrak_active_payloads      : 19627
+  satnogs_total                  : 0
+  satnogs_alive                  : 1688
+  ucs                            : 0
+  merged_index_keys              : 2130
+  data_dir                       : Z:\Mywork\自媒体\公众号\我的产品推文\satellite_search\data
+```
+
 详见顶层 `SKILL.md` / `README.md`。

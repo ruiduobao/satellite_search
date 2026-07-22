@@ -68,6 +68,7 @@ def test_cli_info_json():
 
 
 def test_cli_no_match_returns_1():
-    p = _run(["info", "xxxnotasatellite999"])
+    # --no-online skips the web-search fallback so this is a fast no-match
+    p = _run(["info", "xxxnotasatellite999", "--no-online"])
     # The command returns 1 on no match (we do print a message)
     assert p.returncode == 1
