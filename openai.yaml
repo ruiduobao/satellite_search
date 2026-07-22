@@ -1,12 +1,13 @@
 name: satellite_search
 display_name: 卫星参数查询
 description: |
-  Search and fetch remote-sensing satellite parameters from two authoritative
-  public sources: eoPortal (ESA, ~1000+ missions, detailed text) and
-  WMO OSCAR (~900 satellites, structured orbit / instrument / band tables).
-  Offline-first: ships a pre-scraped JSON index. Live fetch via Playwright
-  when a satellite is not in the index.
-version: 0.1.0
+  离线优先的遥感卫星参数查询 skill。把欧空局 eoPortal（ESA，~1100 颗）
+  和世界气象组织 OSCAR（~1000 颗）这两个最权威的遥感卫星数据库整合到
+  本地索引，本地秒级查询。本地没有时支持在线抓取（Playwright + stealth
+  绕过 Cloudflare）和 web 搜索兜底。所有卫星介绍（summary / FAQ /
+  应用领域 / 名称）均已通过 LLM 翻译为中文，中文用户直接看中文，英文原文
+  作为 secondary 输出保留可溯源。
+version: 0.3.0
 author: Mavis
 license: MIT-0
 entrypoint: scripts/satellite_search.py
@@ -20,3 +21,4 @@ tags:
   - wmo
   - earth-observation
   - params
+  - 中文

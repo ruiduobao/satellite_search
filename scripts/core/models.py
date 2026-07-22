@@ -119,6 +119,7 @@ class MergedRecord:
     """
 
     name: str
+    name_zh: Optional[str] = None
     aliases: List[str] = field(default_factory=list)
     sources: List[str] = field(default_factory=list)
     eoportal: Optional[Dict[str, Any]] = None

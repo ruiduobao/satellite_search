@@ -1,19 +1,20 @@
 # satellite_search · 卫星参数查询
 
-> 把 **eoPortal** (ESA) 和 **WMO OSCAR** 两个最权威的遥感卫星参数源整合进一个本地优先的 skill，
-> 离线查得着就不用联网，本地没有就现场抓。
+> 把 **eoPortal**（ESA）和 **WMO OSCAR** 两个最权威的遥感卫星参数源整合进一个本地优先的 skill，
+> 所有介绍性内容都已翻译成中文，面向中文用户。MIT-0 开源。
 
 ## 为什么做这个
 
-做遥感工作第一步是查卫星参数（传感器、分辨率、波段、轨道、幅宽、运营方）。
-百度搜出来的要么是新闻，要么是博客，参数散落且彼此打架。
+做遥感工作第一步是查卫星参数（传感器、分辨率、波段、轨道、幅宽、运营方）。百度搜出来的
+要么是新闻，要么是博客，参数散落且彼此打架。
 
 最准的查询方式是：
 - 卫星**官网**（每个卫星单独查，麻烦）
-- **eoPortal** —— ESA 支持，~1000+ 颗，文字介绍最详细
-- **WMO OSCAR** —— 世界气象组织，~900 颗，波段/轨道表结构化好
+- **eoPortal**（ESA 支持，~1100 颗，文字介绍最详细）
+- **WMO OSCAR**（世界气象组织，~900 颗，波段/轨道表结构化好）
 
-这个 skill 把两个站抓下来打包成本地索引，并提供 CLI 让"查卫星"这件事变成本地一次查询。
+这个 skill 把两个站抓下来打包成本地索引 + 翻译，并提供 CLI 让"查卫星"这件事变成本地
+一次查询。中文用户直接看中文，英文原文保留供核对。
 
 ## Quickstart
 
@@ -26,6 +27,7 @@ python scripts/satellite_search.py search "Sentinel-2"
 # 详细参数
 python scripts/satellite_search.py info "Sentinel-2A"
 python scripts/satellite_search.py info "FY-4A"
+python scripts/satellite_search.py info "高分三号"
 
 # 本地列表
 python scripts/satellite_search.py list --source oscar --limit 20
@@ -35,39 +37,47 @@ python scripts/satellite_search.py list --source eoportal --limit 20
 python scripts/satellite_search.py fetch "高分三号" --source eoportal
 ```
 
-## 数据源
+## 数据规模
 
-| 源 | URL | 收录规模 | 强项 |
-|---|---|---|---|
-| eoPortal | https://www.eoportal.org/satellite-missions | ~1000+ 颗 | 文字介绍、发射历史、应用领域、国产卫星覆盖好 |
-| WMO OSCAR | https://space.oscar.wmo.int/satellites | ~900 颗 | 轨道/传感器/波段表结构化 |
+| 数据源 | 收录规模 | 数据特点 |
+|---|---|---|
+| **eoPortal** | 1100 颗（列表 + 详情 + 中文翻译） | 文字介绍、Quick facts、FAQ Q&A、国产卫星覆盖好 |
+| **WMO OSCAR** | 1038 颗（列表） | 轨道/传感器/波段表结构化 |
+| **合并去重** | 2130 颗 | — |
+| **中文翻译** | 1100 颗 summary/FAQ | 通过 mimo-v2.5-pro LLM 批量翻译 |
 
-⚠️ 数据版权归 ESA 和 WMO 所有，本 skill 仅做**只读抓取与本地缓存**，
-用于学术研究和教育用途。
+⚠️ 数据版权归 ESA 和 WMO 所有，本 skill 仅做**只读抓取与本地缓存**，用于学术研究和教育用途。
 
 ## 子命令
 
 | 子命令 | 用途 |
 |---|---|
 | `search <keyword>` | 本地索引模糊搜索 |
-| `info <name>` | 多源合并的详细参数 |
+| `info <name>` | 多源合并的详细参数（默认中文） |
 | `list` | 列出本地索引卫星 |
 | `fetch <name>` | 在线抓取（覆盖/补充本地） |
 | `stats` | 看本地索引统计 |
 | `update` | 重新抓取全量并更新本地索引 |
+| `translate` | 用 LLM 翻译 eoPortal 介绍到中文 |
 
 ## 数据格式
 
-`info` / `search` 返回的 JSON：
+`info` / `search` 返回的 JSON 字段（中英双语）：
 
 ```json
 {
   "name": "Sentinel-2A",
-  "aliases": ["S2A"],
+  "name_zh": "哨兵-2A",
   "sources": ["eoportal", "oscar"],
-  "eoportal": { "url": "...", "agency": "ESA", "summary": "..." },
-  "oscar":    { "url": "...", "orbit_type": "SunSync", "instruments": [...] },
-  "merged":   { "agency": "ESA", "orbit": "SunSync, 786 km" }
+  "eoportal": {
+    "agency_zh": "欧空局",
+    "summary_zh": "哨兵-2 是哥白尼计划的一部分...",
+    "summary_en": "Sentinel-2 is part of the Copernicus programme...",
+    "applications_zh": ["陆表监测", "应急响应"],
+    "faq_zh": [{"q": "...", "a": "..."}],
+    "url": "https://www.eoportal.org/..."
+  },
+  "merged": { "agency": "ESA", "orbit": "..." }
 }
 ```
 
@@ -77,6 +87,12 @@ python scripts/satellite_search.py fetch "高分三号" --source eoportal
 
 默认直连（两个站都是墙外但国内直连测试可达）。
 通过 `SATELLITE_SEARCH_USE_PROXY=1` 强制走系统代理（默认 `http://127.0.0.1:7897`）。
+
+## 翻译说明
+
+卫星的中文翻译通过 `mimo-v2.5-pro`（OpenAI 协议）批量完成。翻译结果存到
+`data/eoportal_satellites_zh.jsonl`，合并到 `merged_index.json` 后由 CLI 默认输出。
+英文原文保留为 `summary_en` / `faq_en` / `applications_en` 等字段，供溯源对照。
 
 ## License
 

@@ -38,13 +38,15 @@ def _key(s: str) -> str:
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="Build the merged index (now detail-aware).")
+    p = argparse.ArgumentParser(description="Build the merged index (detail + zh).")
     p.add_argument("--data-dir", default=os.path.join(os.path.dirname(HERE), "data"))
     p.add_argument("--quiet", action="store_true")
     args = p.parse_args(argv)
 
     oscar = _load_jsonl(os.path.join(args.data_dir, "oscar_satellites.jsonl"))
     eoportal = _load_jsonl(os.path.join(args.data_dir, "eoportal_satellites.jsonl"))
+    zh_translations = _load_jsonl(os.path.join(args.data_dir, "eoportal_satellites_zh.jsonl"))
+    zh_by_slug = {r.get("slug"): r for r in zh_translations if r.get("slug")}
 
     merged: Dict[str, Dict[str, Any]] = {}
 
@@ -72,15 +74,17 @@ def main(argv=None):
         merged[k].setdefault("display", n)
 
     eoportal_with_detail = 0
+    eoportal_with_zh = 0
     for rec in eoportal:
         n = rec.get("name") or ""
         if not n:
             continue
         k = _key(n)
+        slug = rec.get("slug")
         d = rec.get("detail")
         eo_entry: Dict[str, Any] = {
             "name": n,
-            "slug": rec.get("slug"),
+            "slug": slug,
             "url": rec.get("url"),
             "taxonomy": rec.get("taxonomy") or [],
         }
@@ -99,6 +103,25 @@ def main(argv=None):
                 "last_updated": d.get("last_updated"),
             })
             eoportal_with_detail += 1
+        # Overlay Chinese translations
+        if slug and slug in zh_by_slug:
+            zt = zh_by_slug[slug]
+            if zt.get("name_zh"):
+                eo_entry["name_zh"] = zt["name_zh"]
+            if zt.get("agency_zh"):
+                eo_entry["agency_zh"] = zt["agency_zh"]
+            if zt.get("status_zh"):
+                eo_entry["status_zh"] = zt["status_zh"]
+            if zt.get("summary_zh") and eo_entry.get("summary"):
+                eo_entry["summary_zh"] = zt["summary_zh"]
+                eo_entry["summary_en"] = eo_entry["summary"]
+            if zt.get("applications_zh") and eo_entry.get("applications"):
+                eo_entry["applications_zh"] = list(zt["applications_zh"])
+                eo_entry["applications_en"] = list(eo_entry["applications"])
+            if zt.get("faq_zh") and eo_entry.get("faq"):
+                eo_entry["faq_zh"] = list(zt["faq_zh"])
+                eo_entry["faq_en"] = list(eo_entry["faq"])
+            eoportal_with_zh += 1
         merged.setdefault(k, {})
         merged[k]["eoportal"] = eo_entry
         merged[k].setdefault("display", n)
@@ -111,6 +134,7 @@ def main(argv=None):
         n_total = len(merged)
         print(f"OK: {n_total} unique satellite keys -> {out_path}")
         print(f"  with eoportal detail: {eoportal_with_detail}")
+        print(f"  with Chinese translation: {eoportal_with_zh}")
     return 0
 
 

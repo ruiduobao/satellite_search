@@ -30,6 +30,7 @@ from .models import (
     OscarRecord,
     jsonl_loads,
 )
+from . import i18n  # noqa: E402  (for status_zh / orbit_zh in merged headline)
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +87,21 @@ def _load_jsonl(filename: str) -> List[Dict[str, Any]]:
     with open(p, "r", encoding="utf-8") as f:
         text = f.read()
     return jsonl_loads(text)
+
+
+@lru_cache(maxsize=1)
+def _load_zh_translations() -> Dict[str, Dict[str, Any]]:
+    """Load Chinese translations keyed by slug. Falls back to empty dict
+    when the file does not exist (i.e. `translate_descriptions.py` has
+    not been run yet)."""
+    p = os.path.join(_data_dir(), "eoportal_satellites_zh.jsonl")
+    if not os.path.exists(p):
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    for rec in _load_jsonl("eoportal_satellites_zh.jsonl"):
+        if rec.get("slug"):
+            out[rec["slug"]] = rec
+    return out
 
 
 @lru_cache(maxsize=1)
@@ -333,7 +349,22 @@ def _find_in_eoportal(query: str) -> Optional[Dict[str, Any]]:
     for rec in all_eoportal():
         if _normalize(rec.get("name", "")) == qn:
             return rec
+    # Also try matching against the Chinese name_zh field
+    zh = _load_zh_translations()
+    for rec in all_eoportal():
+        zt = zh.get(rec.get("slug", ""), {})
+        if zt.get("name_zh") and _normalize(zt["name_zh"]) == qn:
+            return rec
     hits = _search_records(query, all_eoportal(), ["name"], 5)
+    # Try against Chinese names
+    if not hits and zh:
+        cands = []
+        for rec in all_eoportal():
+            zt = zh.get(rec.get("slug", ""), {})
+            if zt.get("name_zh") and _normalize(zt["name_zh"]) == qn:
+                cands.append(rec)
+        if cands:
+            return cands[0]
     return hits[0][1] if hits else None
 
 
@@ -345,6 +376,10 @@ def info(query: str) -> Optional[MergedRecord]:
     If the eoportal record has a ``detail`` sub-dict (from a successful
     detail-page fetch), its fields are surfaced so ``info`` shows
     summary, FAQ, applications, etc. without re-fetching.
+
+    Chinese translations (``eoportal_satellites_zh.jsonl``) are overlaid
+    on top of the eoportal record when present, so the merged payload
+    always has both ``*_zh`` (preferred) and ``*_en`` (original) fields.
     """
     oscar = _find_in_oscar(query)
     eoportal = _find_in_eoportal(query)
@@ -358,8 +393,6 @@ def info(query: str) -> Optional[MergedRecord]:
     if oscar:
         sources.append("oscar")
 
-    # If the eoportal record carries a detail payload, lift it onto the
-    # top-level eoportal dict so the rest of the merger can use it.
     eoportal_effective = eoportal
     if eoportal and eoportal.get("detail"):
         d = eoportal["detail"]
@@ -369,6 +402,34 @@ def info(query: str) -> Optional[MergedRecord]:
             if d.get(k) is not None and not eoportal.get(k):
                 eoportal = {**eoportal, k: d[k]}
         eoportal_effective = eoportal
+
+    # Overlay Chinese translations (eoportal_satellites_zh.jsonl)
+    zh_rec: Dict[str, Any] = {}
+    if eoportal_effective:
+        slug = eoportal_effective.get("slug")
+        if slug:
+            zh_rec = _load_zh_translations().get(slug, {})
+
+    # If translations exist, add *_zh fields. Keep the English originals
+    # under *_en (or just keep the original key, for backward compat).
+    if zh_rec and eoportal_effective:
+        zh_overlay: Dict[str, Any] = {}
+        if zh_rec.get("name_zh") and not eoportal_effective.get("name_zh"):
+            zh_overlay["name_zh"] = zh_rec["name_zh"]
+        if zh_rec.get("agency_zh"):
+            zh_overlay["agency_zh"] = zh_rec["agency_zh"]
+        if zh_rec.get("status_zh"):
+            zh_overlay["status_zh"] = zh_rec["status_zh"]
+        if zh_rec.get("summary_zh") and eoportal_effective.get("summary"):
+            zh_overlay["summary_zh"] = zh_rec["summary_zh"]
+            zh_overlay["summary_en"] = eoportal_effective["summary"]
+        if zh_rec.get("applications_zh") and eoportal_effective.get("applications"):
+            zh_overlay["applications_zh"] = list(zh_rec["applications_zh"])
+            zh_overlay["applications_en"] = list(eoportal_effective["applications"])
+        if zh_rec.get("faq_zh") and eoportal_effective.get("faq"):
+            zh_overlay["faq_zh"] = list(zh_rec["faq_zh"])
+            zh_overlay["faq_en"] = list(eoportal_effective["faq"])
+        eoportal_effective = {**eoportal_effective, **zh_overlay}
 
     # Build a "merged" headline
     agency: Optional[str] = None
@@ -403,6 +464,18 @@ def info(query: str) -> Optional[MergedRecord]:
     if oscar and oscar.get("inclination"):
         orbit_bits.append(f"inc {oscar['inclination']}")
     orbit_str = ", ".join(orbit_bits) if orbit_bits else None
+    # Apply Chinese enum translations to the merged headline fields
+    if status:
+        status_zh = i18n.status_zh(status) if status else None
+    else:
+        status_zh = None
+    if orbit_str:
+        # Map just the first token (the orbit type code)
+        first = orbit_str.split(",")[0].strip()
+        translated = i18n.orbit_zh(first) or first
+        orbit_str_zh = orbit_str.replace(first, translated, 1) if translated != first else orbit_str
+    else:
+        orbit_str_zh = None
 
     instruments: List[str] = []
     if oscar and oscar.get("instruments"):
@@ -410,43 +483,48 @@ def info(query: str) -> Optional[MergedRecord]:
     elif eoportal_effective and eoportal_effective.get("instruments"):
         instruments = list(eoportal_effective["instruments"])
 
-    # The merged payload keeps the full eoportal entry (including
-    # summary/faq/etc. if present) so downstream code can introspect it.
     payload_eoportal = None
     if eoportal_effective:
         payload_eoportal = {
             k: eoportal_effective[k] for k in (
-                "name", "slug", "url", "agency", "country", "launch_date",
-                "end_of_life", "status", "summary", "applications",
-                "instruments", "measurement_domain", "faq", "last_updated",
-                "taxonomy",
+                "name", "name_zh", "slug", "url", "agency", "agency_zh",
+                "country", "launch_date", "end_of_life",
+                "status", "status_zh", "summary", "summary_zh", "summary_en",
+                "applications", "applications_zh", "applications_en",
+                "instruments", "measurement_domain",
+                "faq", "faq_zh", "faq_en", "last_updated", "taxonomy",
             ) if k in eoportal_effective
         }
 
-    # Add merged-level extras
-    payload_eoportal = payload_eoportal or None
     merged: Dict[str, Any] = {
         "agency": agency,
         "launch_date": launch,
         "end_of_life": eol,
         "status": status,
+        "status_zh": status_zh,
         "orbit": orbit_str,
+        "orbit_zh": orbit_str_zh,
         "instruments": instruments,
         "instruments_count": len(instruments),
         "sources_count": len(sources),
     }
-    if eoportal_effective and eoportal_effective.get("summary"):
-        merged["summary"] = eoportal_effective["summary"]
-    if eoportal_effective and eoportal_effective.get("faq"):
-        merged["faq_count"] = len(eoportal_effective["faq"])
+    if eoportal_effective:
+        if eoportal_effective.get("summary_zh"):
+            merged["summary_zh"] = eoportal_effective["summary_zh"]
+        if eoportal_effective.get("summary_en"):
+            merged["summary_en"] = eoportal_effective["summary_en"]
+        if eoportal_effective.get("faq_zh"):
+            merged["faq_zh_count"] = len(eoportal_effective["faq_zh"])
 
-    # Pick a canonical name
+    # Canonical name
     if eoportal_effective and oscar:
         name = eoportal_effective.get("name") or oscar.get("acronym")
     elif eoportal_effective:
         name = eoportal_effective.get("name") or query
     else:
         name = oscar.get("acronym") or query
+
+    name_zh: Optional[str] = eoportal_effective.get("name_zh") if eoportal_effective else None
 
     aliases: List[str] = []
     if eoportal_effective and oscar:
@@ -461,12 +539,13 @@ def info(query: str) -> Optional[MergedRecord]:
     merge_hint: Optional[str] = None
     if len(sources) == 1:
         if sources[0] == "eoportal" and not oscar:
-            merge_hint = "Not in OSCAR. Search 'https://space.oscar.wmo.int' for more."
+            merge_hint = "OSCAR 中暂无记录，可访问 https://space.oscar.wmo.int 查询"
         elif sources[0] == "oscar" and not eoportal:
-            merge_hint = "Not in eoPortal. Search 'https://www.eoportal.org' for more."
+            merge_hint = "eoPortal 中暂无记录，可访问 https://www.eoportal.org 查询"
 
     return MergedRecord(
         name=name,
+        name_zh=name_zh,
         aliases=aliases,
         sources=sources,
         eoportal=payload_eoportal,
