@@ -26,6 +26,12 @@ def collect_files(root: str = ".") -> list[str]:
       the bundle; users run ``update --source celestrak`` on first install
       to fetch the fresh full SATCAT. The active_payloads subset (7 MB)
       is bundled and covers all common search/lookup needs.
+    * data/celestrak_active_payloads.jsonl (7 MB) — built on first run by
+      ``update --source celestrak`` from the full SATCAT.
+    * data/merged_index.json (3.7 MB) — rebuilt on first run by
+      ``update --source all`` from the JSONL files.
+    * data/satnogs_reentered.jsonl (0.5 MB) — optional, only for
+      re-entered-history queries. ``update --source satnogs`` regenerates.
     """
     out = []
     for dirpath, dirs, files in os.walk(root):
@@ -41,8 +47,17 @@ def collect_files(root: str = ".") -> list[str]:
             # Skip data/_* scratch files
             if rel.startswith("data/_"):
                 continue
-            # Skip the 25 MB full CelesTrak SATCAT — use the active subset instead
+            # Skip the 25 MB full CelesTrak SATCAT
             if rel == "data/celestrak_satellites.jsonl":
+                continue
+            # Skip the 7 MB CelesTrak active_payloads subset
+            if rel == "data/celestrak_active_payloads.jsonl":
+                continue
+            # Skip the 3.7 MB merged_index.json (rebuilt on first run)
+            if rel == "data/merged_index.json":
+                continue
+            # Skip satnogs_reentered (optional)
+            if rel == "data/satnogs_reentered.jsonl":
                 continue
             # Skip the publish script itself — internal tooling
             if rel == "publish_to_clawhub.py":
@@ -122,7 +137,11 @@ def main() -> int:
     print("Uploading...")
     r = requests.post(
         f"{api}/skills",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Accept-License": "MIT-0",
+            "X-License-Accepted": "true",
+        },
         files=mp_files,
         timeout=600,
     )
