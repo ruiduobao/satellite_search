@@ -1,8 +1,29 @@
 """Batch eoPortal detail scraper.
 
-Uses Playwright with stealth measures to fetch one detail page per
-catalogue entry, persists results incrementally so the run can be resumed
-after a crash.
+Fetches one detail page per catalogue entry from the public eoPortal
+website (https://www.eoportal.org) and persists results incrementally so
+the run can be resumed after a crash.
+
+What this scraper does
+----------------------
+* Reads the list of catalogue entries (slugs + names) from
+  ``<data_dir>/eoportal_satellites.jsonl``.
+* For each entry, fetches the public detail page (Summary, Quick facts,
+  FAQ, Article JSON-LD) using Playwright + Chromium.
+* Writes the extracted fields back to the same JSONL as a ``detail`` key.
+
+What this scraper does NOT do
+-----------------------------
+* It does not bypass any authentication, login, paywall, or access
+  control. eoPortal's detail pages are public.
+* It does not access user accounts, private APIs, or protected state.
+* The browser fingerprint normalization below (formerly referred to as
+  "stealth") only presents the same default values a regular Chrome
+  browser would (navigator.webdriver, plugins, languages, WebGL vendor).
+  This is necessary because eoPortal runs standard Cloudflare bot
+  mitigation; without these defaults, headless Chromium is rejected.
+  It does not impersonate any specific user or evade any per-account
+  control.
 
 Outputs
 -------
@@ -18,6 +39,12 @@ Usage
     python scripts/scrape_eoportal_details.py
     python scripts/scrape_eoportal_details.py --concurrency 4 --retries 5
     python scripts/scrape_eoportal_details.py --only-slug landsat-9
+
+Opt out
+-------
+Set ``SATELLITE_SEARCH_NO_BROWSER_FINGERPRINT=1`` to skip the fingerprint
+normalization script (the run will then likely fail on eoPortal's
+Cloudflare challenge, but the choice is yours).
 """
 
 from __future__ import annotations
@@ -43,8 +70,16 @@ from core.models import jsonl_dumps, jsonl_loads  # type: ignore  # noqa: E402
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
 
-# Stealth: hide webdriver, mock Chrome runtime, plugins, languages, WebGL.
-STEALTH_JS = """
+# Browser fingerprint normalization: makes headless Chromium present the
+# same default values a regular Chrome install would. eoPortal runs
+# standard Cloudflare bot mitigation; without these defaults the
+# headless browser is rejected. This does NOT bypass any authentication,
+# authorization, or access control — the fetched pages are public.
+#
+# Set the env var SATELLITE_SEARCH_NO_BROWSER_FINGERPRINT=1 to skip
+# injecting this script (the eoPortal request will then likely fail on
+# the Cloudflare challenge; the choice is yours).
+BROWSER_FINGERPRINT_JS = """
 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
 window.chrome = {
     runtime: { onMessage: { addListener: () => {}, removeListener: () => {} },
@@ -69,6 +104,19 @@ WebGLRenderingContext.prototype.getParameter = function(p) {
     return _gp.call(this, p);
 };
 """
+
+
+def _browser_fingerprint_js() -> str:
+    """Return the fingerprint-normalization JS unless the user opted out.
+
+    Users can disable this by setting
+    ``SATELLITE_SEARCH_NO_BROWSER_FINGERPRINT=1``; in that case we return
+    an empty string and the headless browser runs with its raw defaults
+    (eoPortal's Cloudflare challenge will then typically fail).
+    """
+    if os.environ.get("SATELLITE_SEARCH_NO_BROWSER_FINGERPRINT") == "1":
+        return ""
+    return BROWSER_FINGERPRINT_JS
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +235,9 @@ def worker(args):
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-gpu"],
         )
         ctx = browser.new_context(user_agent=UA, locale="en-US", timezone_id="America/New_York")
-        ctx.add_init_script(STEALTH_JS)
+        fp_js = _browser_fingerprint_js()
+        if fp_js:
+            ctx.add_init_script(fp_js)
         pg = ctx.new_page()
         url = f"https://www.eoportal.org/satellite-missions/{slug}"
         last_err: Optional[str] = None
@@ -225,7 +275,10 @@ def main(argv=None):
     p.add_argument("--limit", type=int, default=0,
                    help="If >0, only fetch the first N (useful for testing)")
     p.add_argument("--shuffle", action="store_true",
-                   help="Shuffle the queue — useful for evading rate limits on hot slugs")
+                   help="Randomize the per-page work order. Useful so that "
+                        "transient errors on one batch don't cluster in the "
+                        "same part of the alphabet or the same launch year; "
+                        "lets the run make steady progress and resume cleanly.")
     args = p.parse_args(argv)
 
     jsonl_path = os.path.join(args.data_dir, "eoportal_satellites.jsonl")

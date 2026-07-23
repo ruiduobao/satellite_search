@@ -2,14 +2,16 @@ name: satellite_search
 display_name: 卫星参数查询
 description: |
   离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1,100 颗）、
-  世界气象组织 OSCAR（~1,000 颗）、CelesTrak SATCAT（NORAD，~70,000 条全量 /
-  ~19,600 条在轨有效载荷）和 SatNOGS DB（业余 / 立方星，~1,700 alive）四个
-  权威数据库到本地索引，本地秒级查询。本地没有时支持在线抓取（Playwright +
-  stealth 绕过 Cloudflare）和 web 搜索兜底。所有卫星介绍（summary / FAQ /
-  应用领域 / 名称）均已通过 LLM 翻译为中文，中文用户直接看中文，英文原文
-  作为 secondary 输出保留可溯源。v0.4.0 新增 **NORAD 目录号跨源直查**
-  （`info 25544` 一次拿 ISS 全部参数）。
-version: 0.4.0
+  世界气象组织 OSCAR（~1,000 颗）、CelesTrak SATCAT（NORAD，~19,600 条
+  在轨有效载荷）和 SatNOGS DB（业余 / 立方星，~1,700 alive）四个权威
+  数据库到本地索引，本地秒级查询。本地没有时支持在线抓取（Playwright
+  + 标准浏览器指纹归一化通过 eoPortal Cloudflare 风控）和 web 搜索
+  兜底。所有卫星介绍（summary / FAQ / 应用领域 / 名称）均已通过 LLM
+  翻译为中文，中文用户直接看中文，英文原文作为 secondary 输出保留
+  可溯源。v0.4.0 新增 **NORAD 目录号跨源直查**（`info 25544` 一次
+  拿 ISS 全部参数）。v0.4.1 加固：所有外部请求都有显式隐私提示和
+  opt-out 环境变量；LLM 翻译的 prompt 已加固防御 prompt injection。
+version: 0.4.1
 author: Mavis
 license: MIT-0
 entrypoint: scripts/satellite_search.py

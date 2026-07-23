@@ -3,6 +3,8 @@
 > 把 **eoPortal**（ESA）+ **WMO OSCAR** + **CelesTrak**（NORAD）+ **SatNOGS** 四个最权威的
 > 遥感卫星参数源整合进一个本地优先的 skill，所有介绍性内容都已翻译成中文，面向中文用户。
 > MIT-0 开源。
+> **v0.4.1 加固**：所有外部请求（web 搜索 / LLM 翻译 / 浏览器指纹）都有显式隐私提示和
+> `SATELLITE_SEARCH_NO_*=1` opt-out 环境变量；LLM 翻译的 prompt 已加固防 prompt injection。
 
 ## 为什么做这个
 

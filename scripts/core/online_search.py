@@ -5,6 +5,20 @@ When the local index has no match and the scraper can't reach eoPortal
 web search so the user always gets *something* useful — even if it's just
 "here are the URLs you should look at manually".
 
+Privacy disclosure
+------------------
+When this module runs, the user's *raw query string* (the satellite
+name, NORAD id, or slug they typed) is sent to one of three search
+engines. The query is visible to the search engine and to any network
+intermediary between this machine and the engine's servers.
+
+What is sent: only the query string itself (and the standard HTTP
+headers/cookies the engine expects). No API keys, no local file paths,
+no environment variables, no personal data are sent.
+
+What is NOT sent: any data from ``<data_dir>``, any eoPortal/OSCAR
+records, the user's IP beyond what TCP exposes, or any local state.
+
 Engine priority (first to succeed wins):
 
 1. ``crawl4ai-skill`` (DuckDuckGo) — already installed on this runtime
@@ -16,6 +30,14 @@ The module exposes:
 * :func:`search_satellite_online` — generic web search
 * :func:`fallback_for_eoportal`    — search restricted to eoportal.org
 * :func:`fallback_for_oscar`       — search restricted to space.oscar.wmo.int
+
+Opt out
+-------
+Set the env var ``SATELLITE_SEARCH_NO_ONLINE=1`` to make every
+``search_satellite_online`` / ``fallback_for_eoportal`` /
+``fallback_for_oscar`` call return ``None`` immediately, without hitting
+the network. The CLI also passes ``--no-online`` for the same effect on a
+per-call basis.
 """
 
 from __future__ import annotations
@@ -24,6 +46,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from typing import Any, Dict, List, Optional
 
 
@@ -212,19 +235,38 @@ def search_satellite_online(
     *,
     site: Optional[str] = None,
     num_results: int = 8,
+    quiet: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Search the web for a satellite the local index doesn't know about.
+
+    Privacy
+    -------
+    Sends the query string to one of three search engines (see module
+    docstring). Set ``quiet=True`` to suppress the one-line disclosure
+    printed to stderr.
 
     Returns
     -------
     dict with keys ``engine``, ``hint``, ``query_used``, ``results``;
     or ``None`` if every engine failed.
     """
+    # Opt-out: SATELLITE_SEARCH_NO_ONLINE=1 short-circuits without
+    # touching the network.
+    if os.environ.get("SATELLITE_SEARCH_NO_ONLINE") == "1":
+        return None
+
     engines = [
         _engine_crawl4ai,
         _engine_web_search_skill,
         _engine_duckduckgo_direct,
     ]
+    if not quiet:
+        q_disp = query if site is None else f"{query} site:{site}"
+        print(
+            f"[online_search] sending query to web engines: {q_disp!r} "
+            f"(no API keys, no local files, no PII — query string only).",
+            file=sys.stderr,
+        )
     for engine in engines:
         try:
             res = engine(query, num_results, site)

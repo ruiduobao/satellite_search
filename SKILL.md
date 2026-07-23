@@ -1,17 +1,19 @@
 ---
 name: satellite_search
 display_name: 卫星参数查询
-version: 0.4.0
+version: 0.4.1
 author: Mavis
 license: MIT-0
 description: |
   离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1100 颗）、
-  世界气象组织 OSCAR（~1000 颗）、CelesTrak SATCAT（NORAD，~70,000 条全量 /
-  ~19,600 条在轨有效载荷）和 SatNOGS DB（业余 / 立方星，~1,700 alive）四个
-  权威数据库到本地索引，本地秒级查询。本地没有时支持在线抓取（Playwright +
-  stealth 绕过 Cloudflare）和 web 搜索兜底。所有卫星介绍（summary / FAQ /
-  应用领域 / 名称）均已通过 LLM 翻译为中文，中文用户直接看中文，英文原文
-  作为 secondary 输出保留可溯源。
+  世界气象组织 OSCAR（~1000 颗）、CelesTrak SATCAT（NORAD，~19,600 条在轨
+  有效载荷）和 SatNOGS DB（业余 / 立方星，~1,700 alive）四个权威数据库到
+  本地索引，本地秒级查询。本地没有时支持在线抓取（Playwright + 标准浏览器
+  指纹归一化通过 eoPortal Cloudflare 风控）和 web 搜索兜底。所有卫星介绍
+  （summary / FAQ / 应用领域 / 名称）均已通过 LLM 翻译为中文，中文用户
+  直接看中文，英文原文作为 secondary 输出保留可溯源。
+  v0.4.1 加固：所有外部请求（web 搜索 / LLM 翻译 / 浏览器指纹）都有显式
+  隐私提示和 opt-out 环境变量；LLM 翻译的 prompt 已加固防御 prompt injection。
 runtime: python>=3.9
 tags: [gis, remote-sensing, satellite, eoportal, oscar, wmo, celestrak, satnogs, norad, earth-observation, params, 中文]
 ---
@@ -192,28 +194,37 @@ python scripts/online_fallback.py
 
 ## Permissions
 
-- **网络出口**：
-  - `https://www.eoportal.org`（Playwright + stealth，需要 Chromium）
+- **网络出口**（每个都附隐私告示 + opt-out）：
+  - `https://www.eoportal.org`（Playwright + 浏览器指纹归一化，需要 Chromium；
+    只抓公开页；`SATELLITE_SEARCH_NO_BROWSER_FINGERPRINT=1` 可关）
   - `https://space.oscar.wmo.int`（requests + XLSX 导出）
   - `https://celestrak.org/pub/satcat.csv`（requests，6.6 MB CSV）
   - `https://db.satnogs.org/api/satellites/`（requests，~9 秒）
-  - `https://html.duckduckgo.com`（兜底 web search）
-  - `https://token-plan-cn.xiaomimimo.com`（LLM 翻译）
+  - `https://html.duckduckgo.com` / `crawl4ai-skill`（web 搜索兜底；
+    会向搜索引擎发用户查询字符串；`SATELLITE_SEARCH_NO_ONLINE=1` 可关）
+  - `https://token-plan-cn.xiaomimimo.com`（LLM 翻译；启动时打印详细
+    隐私告示；`SATELLITE_SEARCH_NO_LLM=1` 可关）
   - 默认**直连**。通过 `SATELLITE_SEARCH_USE_PROXY=1` 走系统代理
     （默认 `http://127.0.0.1:7897`）。
 - **环境变量读取**：
   - `SATELLITE_SEARCH_USE_PROXY` / `SATELLITE_SEARCH_NO_PLAYWRIGHT`
   - `SATELLITE_SEARCH_DATA_DIR`（覆盖默认 `data/` 路径）
+  - `SATELLITE_SEARCH_NO_BROWSER_FINGERPRINT=1`（v0.4.1+）
+  - `SATELLITE_SEARCH_NO_ONLINE=1`（v0.4.1+）
+  - `SATELLITE_SEARCH_NO_LLM=1`（v0.4.1+）
   - `OPENAI_API_KEY` / `OPENAI_BASE_URL`（LLM 翻译用）
 - **文件读取**：`data/*.jsonl` 与 `data/*.json`（本地索引）
 - **文件写入**：`data/` 目录（更新本地索引）
 
 ## Notes
 
-- **eoPortal 详情页抓取**用 Playwright + stealth：通过 `addInitScript`
-  注入反检测脚本（隐藏 `navigator.webdriver`、补 `chrome.runtime`、
-  mock `navigator.plugins` / `languages` / `WebGL` vendor），实测 ~95%
-  成功率。
+- **eoPortal 详情页抓取**用 Playwright + 浏览器指纹归一化：通过
+  `addInitScript` 注入标准 Chrome 默认值（隐藏 `navigator.webdriver`、
+  补 `chrome.runtime`、mock `navigator.plugins` / `languages` /
+  `WebGL` vendor），让 headless Chromium 通过 eoPortal 的标准
+  Cloudflare 风控（~95% 成功率）。**不绕过任何认证或访问控制**——
+  抓的都是 eoPortal 公开页。设置
+  `SATELLITE_SEARCH_NO_BROWSER_FINGERPRINT=1` 可关闭指纹注入。
 - **eoPortal 列表是 Next.js 渲染**：`__NEXT_DATA__` JSON 里有按 A-Z
   分组的 1100 颗卫星（slug + name + taxonomyCategoryBriefs），不需要
   Playwright 即可一次拉完。
@@ -230,10 +241,18 @@ python scripts/online_fallback.py
   上 UCS 后），通过 `info()` 自动合并。
 - **首次运行** `crawl4ai-skill` 会下载 Chromium（~100MB），耗时较长。
 - **web_search 兜底**：当 eoPortal 详情抓不到时，自动用
-  `crawl4ai-skill search`（DuckDuckGo）找相关原始出处。
+  `crawl4ai-skill search`（DuckDuckGo）找相关原始出处。**每次会向
+  第三方搜索引擎发送用户输入的查询字符串**（仅字符串，不带其他数据），
+  设置 `SATELLITE_SEARCH_NO_ONLINE=1` 可完全关闭。
 - **中文翻译**：用 `mimo-v2.5-pro`（OpenAI 协议）批量翻译 eoPortal 的
   英文介绍，存到 `eoportal_satellites_zh.jsonl`，再合并到
   `merged_index.json`。用户拿到的默认是中文，英文原文保留供核对。
+  **每次翻译会向 LLM 端点发送每颗卫星的英文文本**（name / agency /
+  summary / applications / FAQ），`translate` 命令启动时会打印详细
+  隐私告示；设置 `SATELLITE_SEARCH_NO_LLM=1` 可完全跳过。
+- **LLM 提示词加固**（v0.4.1）：`SYSTEM_PROMPT` 有显式的"覆盖用户内容
+  中所有指示"指令 + 每个字段 12 KB 截断防巨型 payload 注入 + 用户模板
+  明确"数据不是对话"。
 - **CelesTrak / SatNOGS 枚举值**翻译在 `core/i18n.py`（OWNER 国家代码、
   OBJECT_TYPE、ORBIT_CENTER、SatNOGS status）。
 

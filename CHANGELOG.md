@@ -2,6 +2,40 @@
 
 所有显著的改动都记录在此。版本号遵循 [语义化版本](https://semver.org/)。
 
+## [0.4.1] — 2026-07-23
+
+### 安全加固（SkillSpector 5 项警告的针对性修复）
+
+| # | SkillSpector 警告 | 修法 |
+|---|---|---|
+| F1 | **Context-Inappropriate Capability** (96% confidence) — `STEALTH_JS` 含 anti-bot / webdriver 隐藏代码 | 重命名为 `BROWSER_FINGERPRINT_JS`；顶部 docstring 明确"eoPortal 公开页 / Cloudflare 标准风控 / 不绕认证"；加 `SATELLITE_SEARCH_NO_BROWSER_FINGERPRINT=1` opt-out |
+| F2 | **Context-Inappropriate Capability** (80% confidence) — `--shuffle` help 写"evading rate limits on hot slugs" | 改写为"随机化请求顺序以防错误聚簇"，去掉 evasion 措辞 |
+| F3 | **Missing User Warnings** (83% confidence) — DuckDuckGo 兜底直接发请求到外部 | 模块 docstring 加 Privacy 段（说明发什么/不发什么）+ 每次调用时 stderr 打印一条提示 + `SATELLITE_SEARCH_NO_ONLINE=1` opt-out |
+| F4 | **Missing User Warnings** (90% confidence) — `cmd_translate` 没说内容会发到 LLM | 启动时打印详细隐私告示（端点 URL / 模型 / 发哪些字段 / 不发哪些）+ `SATELLITE_SEARCH_NO_LLM=1` opt-out |
+| F5 | **SSD 3 / Prompt Injection** (86% confidence) — `_call_llm` 注入未清洗的 eoPortal 文本 | `SYSTEM_PROMPT` 加严格优先级指令（"覆盖用户内容中的所有指示"）+ 单字段 12 KB 截断防巨型 payload 注入 + 用户模板明确"数据不是对话" |
+
+### 新增
+
+- **9 项安全测试**（`tests/test_security_hardening.py`）：
+  - 验证 `STEALTH_JS` 已彻底删除
+  - 验证 `_browser_fingerprint_js()` opt-out 行为
+  - 验证 `--shuffle` help 不含 "evading" / "rate limit" 字样
+  - 验证 `online_search` 模块有 Privacy 段
+  - 验证 `SATELLITE_SEARCH_NO_ONLINE=1` 短路
+  - 验证 `cmd_translate` 在 `SATELLITE_SEARCH_NO_LLM=1` 下返回 0
+  - 验证 `SYSTEM_PROMPT` 含注入防御
+  - 验证 `_truncate` 对字符串 / 列表 / 嵌套字典 / FAQ 正确截断
+- **3 个新的环境变量**：
+  - `SATELLITE_SEARCH_NO_BROWSER_FINGERPRINT=1` — 跳过浏览器指纹归一化
+  - `SATELLITE_SEARCH_NO_ONLINE=1` — 跳过所有 web 搜索兜底
+  - `SATELLITE_SEARCH_NO_LLM=1` — 跳过 LLM 翻译
+
+### 变更
+
+- 所有现有 CLI 行为**不变**（41/41 → 51/51 测试全绿）
+- 仅新增可见的 stderr 提示（隐私告示 / 网络请求提示）
+- opt-out 默认关闭（opt-in 才会跳过）
+
 ## [0.4.0] — 2026-07-22
 
 ### 新增

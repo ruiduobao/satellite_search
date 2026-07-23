@@ -636,6 +636,24 @@ def cmd_update(args: argparse.Namespace) -> int:
 def cmd_translate(args: argparse.Namespace) -> int:
     """调用 LLM 翻译 eoPortal 卫星介绍。委托给 translate_descriptions.py。"""
     from translate_descriptions import main as _main  # type: ignore
+    # Privacy disclosure: this command sends the English eoPortal text
+    # (name, summary, applications, FAQ, agency) of each satellite to
+    # the configured LLM provider. By default the provider is
+    # ``https://token-plan-cn.xiaomimimo.com`` (mimo-v2.5-pro, an
+    # OpenAI-compatible endpoint). Nothing else is sent — no API keys
+    # to other services, no local file paths, no environment variables.
+    base_url = os.environ.get("OPENAI_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1")
+    if os.environ.get("SATELLITE_SEARCH_NO_LLM") != "1":
+        print("=" * 72, file=sys.stderr)
+        print("[translate] PRIVACY NOTICE", file=sys.stderr)
+        print(f"[translate] This command sends English eoPortal text to an LLM provider:", file=sys.stderr)
+        print(f"[translate]   LLM endpoint: {base_url}", file=sys.stderr)
+        print(f"[translate]   Model:        {os.environ.get('OPENAI_MODEL', 'mimo-v2.5-pro')}", file=sys.stderr)
+        print("[translate]   Sent per satellite: name, agency, country, launch_date, status,", file=sys.stderr)
+        print("[translate]                     summary, applications list, FAQ Q&A.", file=sys.stderr)
+        print("[translate]   Not sent: API keys, local file paths, environment variables.", file=sys.stderr)
+        print("[translate] To opt out entirely, set SATELLITE_SEARCH_NO_LLM=1 in the environment.", file=sys.stderr)
+        print("=" * 72, file=sys.stderr)
     argv = []
     if args.limit:
         argv += ["--limit", str(args.limit)]
@@ -647,6 +665,9 @@ def cmd_translate(args: argparse.Namespace) -> int:
         argv += ["--include-fetched"]
     if args.dry_run:
         argv += ["--dry-run"]
+    if os.environ.get("SATELLITE_SEARCH_NO_LLM") == "1":
+        print("[translate] SATELLITE_SEARCH_NO_LLM=1 — skipping LLM call (nothing to do).", file=sys.stderr)
+        return 0
     return _main(argv)
 
 
