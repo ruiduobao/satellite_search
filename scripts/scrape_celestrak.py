@@ -18,7 +18,7 @@ This script
 The ``OBJECT_TYPE`` codes (PAY / R/B / DEB / UNK) and ``OPS_STATUS_CODE``
 follow the values documented at https://celestrak.org/satcat/satcat-format.php.
 
-We bypass the global 7897 proxy by setting ``requests.trust_env = False`` so
+We bypass the system proxy by setting ``requests.trust_env = False`` so
 the connection goes directly to celestrak.org.
 """
 
@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-# Bypass global proxy env vars (7897) — direct connection works for CelesTrak
+# Bypass system proxy env vars — direct connection works for CelesTrak
 requests.trust_env = False
 
 SATCAT_URL = "https://celestrak.org/pub/satcat.csv"

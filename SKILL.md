@@ -1,7 +1,7 @@
 ---
 name: satellite_search
 display_name: 卫星参数查询
-version: 0.4.1
+version: 0.4.2
 author: Mavis
 license: MIT-0
 description: |
@@ -204,8 +204,7 @@ python scripts/online_fallback.py
     会向搜索引擎发用户查询字符串；`SATELLITE_SEARCH_NO_ONLINE=1` 可关）
   - `https://token-plan-cn.xiaomimimo.com`（LLM 翻译；启动时打印详细
     隐私告示；`SATELLITE_SEARCH_NO_LLM=1` 可关）
-  - 默认**直连**。通过 `SATELLITE_SEARCH_USE_PROXY=1` 走系统代理
-    （默认 `http://127.0.0.1:7897`）。
+  - 默认**直连**。通过 `SATELLITE_SEARCH_USE_PROXY=1` 走系统代理。
 - **环境变量读取**：
   - `SATELLITE_SEARCH_USE_PROXY` / `SATELLITE_SEARCH_NO_PLAYWRIGHT`
   - `SATELLITE_SEARCH_DATA_DIR`（覆盖默认 `data/` 路径）

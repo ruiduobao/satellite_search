@@ -23,7 +23,7 @@ This script
 
 2. Retries 3 times with exponential backoff on transient errors.
 
-We bypass the global 7897 proxy by setting ``requests.trust_env = False``.
+We bypass the system proxy by setting ``requests.trust_env = False``.
 """
 
 from __future__ import annotations
