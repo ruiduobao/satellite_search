@@ -1,21 +1,24 @@
 ---
-name: satellite_search
-display_name: 卫星参数查询
-version: 0.4.2
-author: Mavis
-license: MIT-0
-description: |
-  离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1100 颗）、
+description: '离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1100 颗）、
+
   世界气象组织 OSCAR（~1000 颗）、CelesTrak SATCAT（NORAD，~19,600 条在轨
+
   有效载荷）和 SatNOGS DB（业余 / 立方星，~1,700 alive）四个权威数据库到
+
   本地索引，本地秒级查询。本地没有时支持在线抓取（Playwright + 标准浏览器
+
   指纹归一化通过 eoPortal Cloudflare 风控）和 web 搜索兜底。所有卫星介绍
+
   （summary / FAQ / 应用领域 / 名称）均已通过 LLM 翻译为中文，中文用户
+
   直接看中文，英文原文作为 secondary 输出保留可溯源。
+
   v0.4.1 加固：所有外部请求（web 搜索 / LLM 翻译 / 浏览器指纹）都有显式
+
   隐私提示和 opt-out 环境变量；LLM 翻译的 prompt 已加固防御 prompt injection。
-runtime: python>=3.9
-tags: [gis, remote-sensing, satellite, eoportal, oscar, wmo, celestrak, satnogs, norad, earth-observation, params, 中文]
+
+  '
+name: satellite_search
 ---
 
 # 卫星参数查询 (satellite_search)
@@ -68,32 +71,32 @@ eoPortal / OSCAR 的文字介绍 + CelesTrak 的轨道参数（周期/倾角/远
 
 ```bash
 # 1) 模糊搜索（先查本地索引，支持中文 + NORAD 数字）
-python scripts/satellite_search.py search landsat
-python scripts/satellite_search.py search "高分三号"
-python scripts/satellite_search.py search sentinel-2
-python scripts/satellite_search.py search STARLINK --source celestrak
-python scripts/satellite_search.py search AO-91 --source satnogs
+python scripts\satellite_search.py search landsat
+python scripts\satellite_search.py search "高分三号"
+python scripts\satellite_search.py search sentinel-2
+python scripts\satellite_search.py search STARLINK --source celestrak
+python scripts\satellite_search.py search AO-91 --source satnogs
 
 # 2) 详细参数（4 源合并 + 中文 summary + FAQ + CelesTrak 轨道参数）
-python scripts/satellite_search.py info "Sentinel-2A"
-python scripts/satellite_search.py info "FY-4A"
-python scripts/satellite_search.py info "GF-1"
-python scripts/satellite_search.py info 25544            # ISS by NORAD id
-python scripts/satellite_search.py info 43013 --lang en  # 纯英文输出
+python scripts\satellite_search.py info "Sentinel-2A"
+python scripts\satellite_search.py info "FY-4A"
+python scripts\satellite_search.py info "GF-1"
+python scripts\satellite_search.py info 25544            # ISS by NORAD id
+python scripts\satellite_search.py info 43013 --lang en  # 纯英文输出
 
 # 3) 列出本地索引中的所有卫星
-python scripts/satellite_search.py list --source oscar --limit 30
-python scripts/satellite_search.py list --source eoportal --limit 30
-python scripts/satellite_search.py list --source celestrak --limit 30
-python scripts/satellite_search.py list --source satnogs --limit 30
-python scripts/satellite_search.py list --source all --limit 30  # 跨 4 源
+python scripts\satellite_search.py list --source oscar --limit 30
+python scripts\satellite_search.py list --source eoportal --limit 30
+python scripts\satellite_search.py list --source celestrak --limit 30
+python scripts\satellite_search.py list --source satnogs --limit 30
+python scripts\satellite_search.py list --source all --limit 30  # 跨 4 源
 
 # 4) 本地没命中？强制在线抓取
-python scripts/satellite_search.py fetch "高分三号" --source eoportal
-python scripts/satellite_search.py fetch "Sentinel-2A" --source both
+python scripts\satellite_search.py fetch "高分三号" --source eoportal
+python scripts\satellite_search.py fetch "Sentinel-2A" --source both
 
 # 5) 看索引里有多少颗
-python scripts/satellite_search.py stats
+python scripts\satellite_search.py stats
 ```
 
 ## 子命令
@@ -168,28 +171,28 @@ python scripts/satellite_search.py stats
 
 ```bash
 # 重新抓 OSCAR 列表（4 秒搞定 1000 颗）
-python scripts/satellite_search.py update --source oscar
+python scripts\satellite_search.py update --source oscar
 
 # 重新抓 eoPortal 列表（2 秒搞定 1100 颗）
-python scripts/satellite_search.py update --source eoportal
+python scripts\satellite_search.py update --source eoportal
 
 # 重新抓 CelesTrak SATCAT（~3 秒下载 6.6 MB CSV + 解析 70k 条）
-python scripts/satellite_search.py update --source celestrak
+python scripts\satellite_search.py update --source celestrak
 
 # 重新抓 SatNOGS（~9 秒拿到 alive + re-entered）
-python scripts/satellite_search.py update --source satnogs
+python scripts\satellite_search.py update --source satnogs
 
 # 全部 4 源 + 重建 merged 索引（推荐日常用）
-python scripts/satellite_search.py update --source all
+python scripts\satellite_search.py update --source all
 
 # 重新抓 eoPortal 详情（~30 分钟，4 并发 + Playwright stealth）
-python scripts/scrape_eoportal_details.py --shuffle --concurrency 4
+python scripts\scrape_eoportal_details.py --shuffle --concurrency 4
 
 # 用 LLM 翻译 eoPortal 全部 1100 颗卫星的 summary/FAQ 到中文
-python scripts/translate_descriptions.py --concurrency 4
+python scripts\translate_descriptions.py --concurrency 4
 
 # 对详情抓不到的 slug 跑 web search
-python scripts/online_fallback.py
+python scripts\online_fallback.py
 ```
 
 ## Permissions
@@ -258,7 +261,7 @@ python scripts/online_fallback.py
 ## 输出示例
 
 ```bash
-$ python scripts/satellite_search.py info 25544
+$ python scripts\satellite_search.py info 25544
 # ISS (ZARYA)  / 国际空间站（ZARYA）
   数据源：eoPortal, oscar, celestrak（共 3 个）
   NORAD 目录号：25544

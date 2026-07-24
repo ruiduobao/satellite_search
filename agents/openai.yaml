@@ -1,0 +1,3 @@
+description: 离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1100 颗）、
+display_name: Satellite_Search
+name: satellite_search
