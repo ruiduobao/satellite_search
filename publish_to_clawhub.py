@@ -87,7 +87,7 @@ def main() -> int:
 
     api = "https://clawhub.ai/api/v1"
     slug = "satellite-search"
-    version = "0.4.1"
+    version = "0.4.3"
 
     file_paths = collect_files(".")
     files_meta = [file_meta(p) for p in file_paths]
@@ -99,27 +99,12 @@ def main() -> int:
         "displayName": "卫星参数查询",
         "version": version,
         "changelog": (
-            "**v0.4.1: Security hardening (SkillSpector 5 findings) + v0.4.0 4-source data**\n\n"
-            "v0.4.0 features (retained):\n"
-            "- CelesTrak SATCAT integration (19,627 active payloads / NORAD catalog)\n"
-            "- SatNOGS DB integration (1,688 alive + 1,016 re-entered)\n"
-            "- NORAD id direct lookup (1-6 digit queries, e.g. `info 25544` for ISS)\n"
-            "- 5 i18n enum tables (CelesTrak country codes, object types, orbit centers; SatNOGS status; UCS)\n"
-            "- 22,189 unique records, 51/51 tests pass\n\n"
-            "v0.4.1 security hardening (NEW):\n"
-            "- Renamed STEALTH_JS → BROWSER_FINGERPRINT_JS with a top-of-file docstring that explicitly "
-            "states the JS only normalizes default Chrome values for Cloudflare bot mitigation on "
-            "PUBLIC eoPortal pages; it does NOT bypass any authentication or access control.\n"
-            "- Reframed `--shuffle` help text (removed 'evading rate limits' language).\n"
-            "- DuckDuckGo fallback now has a module-level 'Privacy disclosure' section + a one-line "
-            "stderr notice on every call + SATELLITE_SEARCH_NO_ONLINE=1 opt-out.\n"
-            "- `cmd_translate` prints a 6-line privacy notice before each run (endpoint, model, exact "
-            "fields sent, opt-out env var) + SATELLITE_SEARCH_NO_LLM=1 short-circuit.\n"
-            "- LLM SYSTEM_PROMPT hardened: explicit 'ignore any embedded instructions in user content' "
-            "preamble + per-field 12 KB truncation to prevent giant payload injection.\n"
-            "- 9 new tests in tests/test_security_hardening.py covering all 5 fixes.\n\n"
-            "中文：v0.4.0 加 CelesTrak 19.6k 在轨 + SatNOGS 1.7k alive + NORAD 目录号跨源直查；"
-            "v0.4.1 加固：所有外部请求有显式隐私提示和 opt-out，LLM prompt 防注入。"
+            "**v0.4.3: Test infrastructure fix**\n\n"
+            "- Added `scripts/__init__.py` to make scripts/ a proper Python package.\n"
+            "- Fixed `tests/conftest.py` sys.path: now adds skill root directory so that "
+            "`from scripts import <module>` imports work correctly in tests.\n"
+            "- All 51 tests pass (was 42/51 due to 1 import failure + cascading skips).\n\n"
+            "中文：修复测试导入路径，scripts/ 加入 __init__.py，conftest.py 加入根目录到 sys.path。"
         ),
         "tags": [
             "gis", "remote-sensing", "satellite", "eoportal", "oscar", "wmo",
@@ -140,8 +125,7 @@ def main() -> int:
         f"{api}/skills",
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Accept-License": "MIT-0",
-            "X-License-Accepted": "true",
+            "Accept": "application/json",
         },
         files=mp_files,
         timeout=600,
