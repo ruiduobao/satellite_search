@@ -1,6 +1,6 @@
 ---
 name: satellite-search
-description: '离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1100 颗）、 description: '离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1100 颗）、  世界气象组织 OSCAR（~1000 颗）、CelesTrak SATCAT（NORAD，~19,600 条在轨  有效载荷）和 SatNOGS DB（业余 / 立方星，~1,700 alive）四个权威数据库到  本地索引，本地秒级查询。本地没有时支持在线抓取（Playwright + 标准浏览器  指纹归一化通过 eoPortal Cloudflare 风控）和 web 搜索兜底。所有卫星介绍  （summary / FAQ / 应用领域 / 名称）均已通过 LLM 翻译为中文，中文用户  直接看中文，英文原文作为 secondary 输出保留可溯源。  v0.4.1 加固：所有外部请求（web 搜索 / LLM 翻译 / 浏览器指纹）都有显式  隐私提示和 opt-out 环境变量；LLM 翻译的 prompt 已加固防御 prompt injection。  '
+description: "Offline-first remote sensing satellite parameter search skill. Integrates eoPortal (ESA), WMO OSCAR, CelesTrak SATCAT, and SatNOGS DB into a local index for instant queries."
 ---
 
 # 卫星参数查询 (satellite-search)
