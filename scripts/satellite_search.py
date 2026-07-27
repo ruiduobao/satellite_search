@@ -1,4 +1,4 @@
-"""CLI 入口 — satellite_search skill
+"""CLI 入口 — satellite-search skill
 
 子命令
 -------
@@ -39,6 +39,67 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 from core import i18n, local_index, online_search, scraper  # type: ignore  # noqa: E402
+
+# Path setup so the vendored _geoskill_core.aoi is importable for --place.
+_SKILL_DIR = os.path.dirname(HERE)
+if _SKILL_DIR not in sys.path:
+    sys.path.insert(0, _SKILL_DIR)
+try:
+    from _geoskill_core.aoi import resolve_place as _resolve_place  # type: ignore
+    from _geoskill_core.aoi import NoMatchError as _NoMatchError  # type: ignore
+    _HAS_AOI = True
+except Exception:  # noqa: BLE001
+    _resolve_place = None
+    _NoMatchError = Exception
+    _HAS_AOI = False
+
+
+def _filter_satellites_by_place(
+    hits: List[Dict[str, Any]], place_bbox: List[float], buffer_deg: float = 0.0
+) -> List[Dict[str, Any]]:
+    """Filter search hits to satellites that can observe the given bbox.
+
+    Rule of thumb for LEO / near-polar satellites:
+        max_latitude_reached ≈ orbital_inclination_deg
+    So we keep hits where:
+      * inclination_deg is None / unknown (don't penalise), OR
+      * inclination_deg >= place_lat (satellite reaches the place's latitude), OR
+      * the satellite is in GEO (inclination ~0 + altitude > 35,000 km), since
+        GEO birds at 0° inclination can see any point between ~81°N and ~81°S.
+
+    The place's centroid latitude is computed from the bbox.
+    """
+    w, s, e, n = place_bbox
+    place_lat = (s + n) / 2.0
+    out: List[Dict[str, Any]] = []
+    for h in hits:
+        rec = h.get("record") or {}
+        inc = rec.get("inclination")
+        alt = rec.get("altitude")
+        if inc is None:
+            # Unknown orbit → keep (we don't want to silently drop).
+            out.append(h)
+            continue
+        try:
+            inc_f = float(inc)
+        except (TypeError, ValueError):
+            out.append(h)
+            continue
+        alt_f: Optional[float] = None
+        if alt is not None:
+            try:
+                alt_f = float(alt)
+            except (TypeError, ValueError):
+                alt_f = None
+        # GEO: low inclination + high altitude → can see most latitudes.
+        is_geo = inc_f < 5.0 and alt_f is not None and alt_f > 35000.0
+        if is_geo or inc_f >= place_lat - 0.5:  # 0.5° slop
+            out.append(h)
+    return out
+
+
+def _print_err(msg: str) -> None:
+    print(msg, file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -165,11 +226,50 @@ def _format_search_hit(h: Dict[str, Any], lang: str) -> str:
 
 def cmd_search(args: argparse.Namespace) -> int:
     hits = local_index.search(args.keyword, source=args.source, limit=args.limit)
+
+    # --place filter (Phase 6 batch-C)
+    place_info: Optional[Dict[str, Any]] = None
+    if getattr(args, "place", None):
+        if not _HAS_AOI or _resolve_place is None:
+            _print_err("--place requires _geoskill_core/aoi.py (vendored)")
+            return 1
+        try:
+            manifest = _resolve_place(args.place, buffer_deg=0.0)
+        except _NoMatchError as exc:
+            _print_err(f"Place resolution failed: {exc}")
+            return 1
+        if not manifest.bbox_wgs84 or len(manifest.bbox_wgs84) != 4:
+            _print_err(f"place resolved without a bbox: {args.place!r}")
+            return 1
+        place_bbox = list(manifest.bbox_wgs84)
+        n_before = len(hits)
+        hits = _filter_satellites_by_place(hits, place_bbox)
+        place_info = {
+            "place": args.place,
+            "bbox": place_bbox,
+            "resolver": manifest.resolver,
+            "confidence": manifest.confidence,
+            "n_before_filter": n_before,
+            "n_after_filter": len(hits),
+        }
+
     if args.json:
-        for h in hits:
-            print(json.dumps(h, ensure_ascii=False))
+        out_payload: Dict[str, Any] = {"results": hits}
+        if place_info is not None:
+            out_payload["place_filter"] = place_info
+        if place_info is not None:
+            # When --place is used, print a single JSON object (not NDJSON)
+            # so the place filter metadata is preserved alongside results.
+            print(json.dumps(out_payload, ensure_ascii=False, indent=2))
+        else:
+            for h in hits:
+                print(json.dumps(h, ensure_ascii=False))
         return 0
     if not hits:
+        if place_info is not None:
+            print(f"--place {args.place!r}: filtered 0 satellites (inclination < "
+                  f"{place_info['bbox'][1]:.1f}°N or unknown).")
+            return 1
         print(f"本地未找到与 {args.keyword!r} 匹配的卫星。")
         online = online_search.search_satellite_online(args.keyword, num_results=5)
         if online:
@@ -178,7 +278,12 @@ def cmd_search(args: argparse.Namespace) -> int:
                 print(f"  - {r['title']}\n    {r['url']}\n    {r['snippet'][:120]}")
         return 1
     lang = getattr(args, "lang", "zh")
-    print(f"{args.keyword!r} 的 {len(hits)} 条最匹配结果（数据源={args.source}）：\n")
+    if place_info is not None:
+        print(f"{args.keyword!r} 的 {len(hits)}/{place_info['n_before_filter']} 条 "
+              f"结果可观测 {args.place!r} (inclination ≥ {place_info['bbox'][1]:.1f}°N, "
+              f"数据源={args.source})：\n")
+    else:
+        print(f"{args.keyword!r} 的 {len(hits)} 条最匹配结果（数据源={args.source}）：\n")
     for i, h in enumerate(hits, 1):
         print(f"  {i:2d}.{_format_search_hit(h, lang)}")
     return 0
@@ -470,10 +575,103 @@ def cmd_stats(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(s, ensure_ascii=False, indent=2))
         return 0
-    print("satellite_search 本地索引统计")
+    print("satellite-search 本地索引统计")
     print("-" * 50)
     for k, v in s.items():
         print(f"  {k:30s} : {v}")
+    return 0
+
+
+# ── batch3 v0.2.0+: compare two satellites side-by-side ──────────────────────
+COUNTRY_NAME_ZH = {
+    "PRC": "中国", "CHINA": "中国",
+    "USA": "美国", "US": "美国",
+    "ESA": "欧洲空间局",
+    "RUS": "俄罗斯", "CIS": "俄罗斯/苏联",
+    "JAPAN": "日本", "JPN": "日本",
+    "IND": "印度", "INDIA": "印度",
+    "FRANCE": "法国", "GERMANY": "德国", "ITALY": "意大利",
+    "UK": "英国", "CANADA": "加拿大", "BRAZIL": "巴西",
+    "KOREA": "韩国", "SKOR": "韩国", "DPRK": "朝鲜", "NKOR": "朝鲜",
+    "ISRAEL": "以色列", "TURKEY": "土耳其", "TURK": "土耳其",
+    "AUSTRALIA": "澳大利亚", "AUS": "澳大利亚",
+    "SPN": "西班牙", "FR": "法国", "GER": "德国", "IT": "意大利",
+    "IRAN": "伊朗", "IRN": "伊朗",
+    "PAKIST": "巴基斯坦", "PAKISTAN": "巴基斯坦",
+    "UAE": "阿联酋", "ARABSAT": "阿拉伯卫星",
+    "EUME": "欧空局成员", "EUMETSAT": "欧洲气象卫星",
+    "SES": "SES", "INTELSAT": "国际通信卫星",
+    "INMARSAT": "国际海事卫星", "INTRL": "国际",
+}
+
+
+def _country_zh(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    return COUNTRY_NAME_ZH.get(code.upper(), code)
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    """Side-by-side comparison of two satellites (batch3+)."""
+    if len(args.names) != 2:
+        print("Usage: satellite-search.py compare <name1> <name2>")
+        return 2
+    a = local_index.info(args.names[0])
+    b = local_index.info(args.names[1])
+    if a is None:
+        print(f"Not found: {args.names[0]!r}")
+        return 1
+    if b is None:
+        print(f"Not found: {args.names[1]!r}")
+        return 1
+    if args.json:
+        out = {
+            args.names[0]: a.to_dict(),
+            args.names[1]: b.to_dict(),
+        }
+        _print_json(out)
+        return 0
+    ad = a.to_dict()
+    bd = b.to_dict()
+    aeop = ad.get("eoportal") or {}
+    beop = bd.get("eoportal") or {}
+    ac = ad.get("celestrak") or {}
+    bc = bd.get("celestrak") or {}
+    rows = [
+        ("NAME", a.name, b.name),
+        ("NAME_ZH", ad.get("name_zh"), bd.get("name_zh")),
+        ("NORAD", ad.get("norad_id"), bd.get("norad_id")),
+        ("SOURCES", ",".join(ad.get("sources", []) or []), ",".join(bd.get("sources", []) or [])),
+        ("AGENCY", aeop.get("agency"), beop.get("agency")),
+        ("AGENCY_ZH", aeop.get("agency_zh"), beop.get("agency_zh")),
+        ("STATUS", aeop.get("status"), beop.get("status")),
+        ("LAUNCH", aeop.get("launch_date"), beop.get("launch_date")),
+        ("OWNER", ac.get("OWNER"), bc.get("OWNER")),
+        ("OWNER_ZH", _country_zh(ac.get("OWNER")), _country_zh(bc.get("OWNER"))),
+        ("PERIOD_MIN", ac.get("PERIOD"), bc.get("PERIOD")),
+        ("INCL_DEG", ac.get("INCLINATION"), bc.get("INCLINATION")),
+        ("APO_KM", ac.get("APOGEE"), bc.get("APOGEE")),
+        ("PER_KM", ac.get("PERIGEE"), bc.get("PERIGEE")),
+        ("INSTRUMENTS", ", ".join(aeop.get("instruments", []) or []),
+                         ", ".join(beop.get("instruments", []) or [])),
+    ]
+    w = max(20, *(len(str(v)) for row in rows for v in row))
+    print(f"{'Attribute':<22}  {args.names[0]:<{w}}  {args.names[1]:<{w}}")
+    print("-" * (22 + 2 + w * 2 + 2))
+    for k, va, vb in rows:
+        va_s = str(va) if va is not None else "—"
+        vb_s = str(vb) if vb is not None else "—"
+        print(f"{k:<22}  {va_s:<{w}}  {vb_s:<{w}}")
+    return 0
+
+
+def cmd_countries(args: argparse.Namespace) -> int:
+    """List the CelesTrak country codes known in COUNTRY_NAME_ZH (batch3+)."""
+    print("CelesTrak OWNER country code (subset translated to Chinese):\n")
+    items = sorted(COUNTRY_NAME_ZH.items())
+    for code, zh in items:
+        print(f"  {code:<12} {zh}")
+    print(f"\n({len(items)} codes pre-translated; unrecognised codes pass through as-is.)")
     return 0
 
 
@@ -682,6 +880,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--json", action="store_true",
                    help="以 JSON 行格式输出（每行一个对象）")
+    p.add_argument("--qa", metavar="PATH", default=None,
+                   help="Write a JSON run-summary sidecar to PATH (e.g. --qa run.qa.json). "
+                        "Records the subcommand, keyword / names, source, returned satellite "
+                        "ids, and timestamp so each lookup is auditable.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # list
@@ -697,6 +899,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--source", default="all",
                     choices=["oscar", "eoportal", "celestrak", "satnogs", "all", "both"])
     sp.add_argument("--limit", type=int, default=20)
+    sp.add_argument(
+        "--place",
+        help="Place name (e.g. '北京市', '长江三角洲'). Resolved via "
+             "_geoskill_core.aoi (offline + Open-Meteo + Nominatim) to a "
+             "bbox, then filters results to satellites whose orbital "
+             "inclination is sufficient to overfly the place's latitude "
+             "(GEO birds always pass). Example: `satellite-search search "
+             "高分 --place 北京市`.",
+    )
     sp.set_defaults(func=cmd_search)
 
     # info
@@ -724,6 +935,19 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("stats", help="查看本地索引统计。")
     sp.set_defaults(func=cmd_stats)
 
+    # compare (batch3+)
+    sp = sub.add_parser("compare",
+                        help="并排对比两颗卫星的合并参数（eoPortal/OSCAR/CelesTrak）。")
+    sp.add_argument("names", nargs=2, metavar="NAME",
+                    help="两颗卫星名称 / NORAD id")
+    sp.add_argument("--json", action="store_true", help="JSON 输出")
+    sp.set_defaults(func=cmd_compare)
+
+    # countries (batch3+)
+    sp = sub.add_parser("countries",
+                        help="列出 CelesTrak OWNER 国家代码的中文映射。")
+    sp.set_defaults(func=cmd_countries)
+
     # update
     sp = sub.add_parser("update", help="重新抓取源数据库并重建索引。")
     sp.add_argument("--source", default="all",
@@ -743,10 +967,55 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def write_qa_summary(qa_path: str, command: str, args: argparse.Namespace,
+                      result_summary: Dict[str, Any]) -> None:
+    """Write a JSON run-summary sidecar (Phase 5 optimization).
+
+    Records the subcommand, the primary lookup key (keyword / name / names),
+    the source filter, the returned satellite ids and counts, and a timestamp
+    so each lookup is auditable.
+    """
+    summary: Dict[str, Any] = {
+        "skill": "satellite-search",
+        "command": command,
+        "version": "0.4.1",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": getattr(args, "source", None),
+        "limit": getattr(args, "limit", None),
+        "lang": getattr(args, "lang", None),
+        "json": getattr(args, "json", False),
+    }
+    # Capture the primary lookup key for the most common subcommands.
+    for key in ("keyword", "name"):
+        v = getattr(args, key, None)
+        if v:
+            summary["primary"] = v
+            break
+    if command == "compare":
+        summary["primary"] = getattr(args, "names", None)
+    summary.update(result_summary)
+
+    parent = os.path.dirname(os.path.abspath(qa_path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(qa_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     p = build_parser()
     args = p.parse_args(argv)
-    return args.func(args)
+    code = args.func(args)
+
+    # Phase 5: --qa sidecar summary (after the subcommand has produced
+    # output, so the sidecar reflects the actual result).
+    if getattr(args, "qa", None):
+        result_summary: Dict[str, Any] = {"returncode": code}
+        try:
+            write_qa_summary(args.qa, args.cmd, args, result_summary)
+        except OSError as e:
+            print(f"WARN: --qa sidecar could not be written: {e}", file=sys.stderr)
+    return code
 
 
 if __name__ == "__main__":

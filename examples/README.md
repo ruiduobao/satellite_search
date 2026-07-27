@@ -99,7 +99,7 @@ $ python scripts/satellite_search.py search STARLINK --source celestrak --limit 
 
 ```
 $ python scripts/satellite_search.py stats
-satellite_search 本地索引统计
+satellite-search 本地索引统计
 --------------------------------------------------
   oscar                          : 1038
   eoportal                       : 1128
@@ -109,7 +109,7 @@ satellite_search 本地索引统计
   satnogs_alive                  : 1688
   ucs                            : 0
   merged_index_keys              : 2130
-  data_dir                       : Z:\Mywork\自媒体\公众号\我的产品推文\satellite_search\data
+  data_dir                       : Z:\Mywork\自媒体\公众号\我的产品推文\satellite-search\data
 ```
 
 详见顶层 `SKILL.md` / `README.md`。

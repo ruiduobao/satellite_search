@@ -3,8 +3,8 @@
 This module is the "online" side of the skill — it is the only module in
 ``core`` that touches the network. It is used by:
 
-* ``satellite_search.py update``  — to rebuild the bundled ``data/`` files
-* ``satellite_search.py fetch``   — to look up a single satellite on demand
+* ``satellite-search.py update``  — to rebuild the bundled ``data/`` files
+* ``satellite-search.py fetch``   — to look up a single satellite on demand
 
 Two sources are supported:
 

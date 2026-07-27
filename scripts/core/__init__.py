@@ -1,4 +1,4 @@
-"""satellite_search core package.
+"""satellite-search core package.
 
 This package provides:
   * `models`         — dataclass-style typed records for satellite metadata

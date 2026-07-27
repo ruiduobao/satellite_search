@@ -47,7 +47,7 @@ ALL_JSONL = os.path.join(DATA_DIR, "satnogs_all.jsonl")
 ALIVE_JSONL = os.path.join(DATA_DIR, "satnogs_alive.jsonl")
 REENTERED_JSONL = os.path.join(DATA_DIR, "satnogs_reentered.jsonl")
 
-USER_AGENT = "satellite_search/0.4 (+https://github.com/ruiduobao/satellite_search)"
+USER_AGENT = "satellite_search/0.4 (+https://github.com/ruiduobao/satellite-search)"
 PAGE_SIZE = 100
 MAX_PAGES = 60
 

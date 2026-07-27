@@ -1,4 +1,4 @@
-"""Data models for the satellite_search skill.
+"""Data models for the satellite-search skill.
 
 The skill ships five kinds of records:
 

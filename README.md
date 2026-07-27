@@ -1,4 +1,4 @@
-# satellite_search · 卫星参数查询
+# satellite-search · 卫星参数查询
 
 > 把 **eoPortal**（ESA）+ **WMO OSCAR** + **CelesTrak**（NORAD）+ **SatNOGS** 四个最权威的
 > 遥感卫星参数源整合进一个本地优先的 skill，所有介绍性内容都已翻译成中文，面向中文用户。

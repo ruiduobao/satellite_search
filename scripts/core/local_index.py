@@ -150,7 +150,7 @@ def all_celestrak() -> List[Dict[str, Any]]:
 
 def all_celestrak_active() -> List[Dict[str, Any]]:
     """Return only CelesTrak SATCAT entries that are *active payloads*
-    (OBJECT_TYPE=PAY, no DECAY_DATE). Useful for the satellite_search CLI
+    (OBJECT_TYPE=PAY, no DECAY_DATE). Useful for the satellite-search CLI
     to avoid listing 70k+ debris items."""
     return _load_jsonl("celestrak_active_payloads.jsonl")
 

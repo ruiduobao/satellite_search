@@ -276,7 +276,7 @@ def search_satellite_online(
             res["hint"] = (
                 f"Web search results for {query!r} via {res['engine']}. "
                 "Open one of the suggested URLs for authoritative data; "
-                "or call `satellite_search.py fetch <name> --source both` "
+                "or call `satellite-search.py fetch <name> --source both` "
                 "to attempt an automated grab."
             )
             return res

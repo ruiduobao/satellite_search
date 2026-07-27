@@ -44,7 +44,7 @@ RAW_CSV = os.path.join(DATA_DIR, "_satcat.csv")
 ALL_JSONL = os.path.join(DATA_DIR, "celestrak_satellites.jsonl")
 ACTIVE_JSONL = os.path.join(DATA_DIR, "celestrak_active_payloads.jsonl")
 
-USER_AGENT = "satellite_search/0.4 (+https://github.com/ruiduobao/satellite_search)"
+USER_AGENT = "satellite_search/0.4 (+https://github.com/ruiduobao/satellite-search)"
 
 
 def download_csv(force: bool = False) -> str:
