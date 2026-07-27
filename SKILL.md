@@ -1,27 +1,9 @@
 ---
-description: '离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1100 颗）、
-
-  世界气象组织 OSCAR（~1000 颗）、CelesTrak SATCAT（NORAD，~19,600 条在轨
-
-  有效载荷）和 SatNOGS DB（业余 / 立方星，~1,700 alive）四个权威数据库到
-
-  本地索引，本地秒级查询。本地没有时支持在线抓取（Playwright + 标准浏览器
-
-  指纹归一化通过 eoPortal Cloudflare 风控）和 web 搜索兜底。所有卫星介绍
-
-  （summary / FAQ / 应用领域 / 名称）均已通过 LLM 翻译为中文，中文用户
-
-  直接看中文，英文原文作为 secondary 输出保留可溯源。
-
-  v0.4.1 加固：所有外部请求（web 搜索 / LLM 翻译 / 浏览器指纹）都有显式
-
-  隐私提示和 opt-out 环境变量；LLM 翻译的 prompt 已加固防御 prompt injection。
-
-  '
-name: satellite_search
+name: satellite-search
+description: '离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1100 颗）、 description: '离线优先的遥感卫星参数查询 skill。整合欧空局 eoPortal（ESA，~1100 颗）、  世界气象组织 OSCAR（~1000 颗）、CelesTrak SATCAT（NORAD，~19,600 条在轨  有效载荷）和 SatNOGS DB（业余 / 立方星，~1,700 alive）四个权威数据库到  本地索引，本地秒级查询。本地没有时支持在线抓取（Playwright + 标准浏览器  指纹归一化通过 eoPortal Cloudflare 风控）和 web 搜索兜底。所有卫星介绍  （summary / FAQ / 应用领域 / 名称）均已通过 LLM 翻译为中文，中文用户  直接看中文，英文原文作为 secondary 输出保留可溯源。  v0.4.1 加固：所有外部请求（web 搜索 / LLM 翻译 / 浏览器指纹）都有显式  隐私提示和 opt-out 环境变量；LLM 翻译的 prompt 已加固防御 prompt injection。  '
 ---
 
-# 卫星参数查询 (satellite_search)
+# 卫星参数查询 (satellite-search)
 
 把 **eoPortal** + **WMO OSCAR** + **CelesTrak** + **SatNOGS** 四个最权威的遥感卫星参数源整合进
 一个本地优先的 skill，面向中文用户，所有介绍性内容（summary、FAQ、应用领域、名称）均已翻译
@@ -31,7 +13,7 @@ name: satellite_search
 且彼此打架。最准的要么去卫星官网翻文档，要么去欧空局 eoPortal、WMO OSCAR 这种专门数据库
 查——但每个卫星都单独搜一遍太费劲。
 
-**satellite_search** 把 4 个站抓下来打包成本地索引，本地秒查；本地没有时再现场抓。
+**satellite-search** 把 4 个站抓下来打包成本地索引，本地秒查；本地没有时再现场抓。
 eoPortal 详情页有反爬保护，用 Playwright + stealth（隐藏 webdriver、模拟 Chrome
 runtime / navigator.plugins / languages / WebGL）绕过 Cloudflare，全量抓取 1100+ 颗
 卫星的 Quick facts / Summary / FAQ Q&A。CelesTrak 拿美国国防部 NORAD 太空目标目录
@@ -287,3 +269,19 @@ $ python scripts\satellite_search.py info 25544
 MIT-0 — 详见 [LICENSE](./LICENSE)。
 数据来源：eoPortal © ESA、OSCAR © WMO、CelesTrak © U.S. Government、
 SatNOGS © CC BY-SA 4.0。本 skill 仅做只读抓取与本地缓存。
+
+
+## Credentials
+
+The **offline audit / query** workflow does **not** require any credentials.
+Only the optional **LLM translation** of dataset descriptions (Chinese ↔
+English) needs an OpenAI-compatible API key.
+
+Resolution order for LLM key:
+
+1. OPENAI_API_KEY env var
+2. **Default** (geoskill-core credentials.py): empty — set the env var to enable
+
+LLM translation is opt-in; the skill works fine without it (translations just
+fall back to the local bilingual catalog). The key is never written to skill
+source, sidecars, or logs.
